@@ -155,7 +155,7 @@
   - **Property 14: User blocking bidirectional**
   - **Validates: Requirements 4.5**
 
-- [ ] 12. Implement offline support and reliability features
+- [x] 12. Implement offline support and reliability features
   - Create message queuing for offline scenarios
   - Implement automatic reconnection logic
   - Add cross-device synchronization
@@ -174,7 +174,7 @@
   - **Property 18: Message retry mechanism**
   - **Validates: Requirements 5.5**
 
-- [ ] 13. Create API routes and endpoints
+- [-] 13. Create API routes and endpoints
   - Implement authentication routes (login, register, logout)
   - Create user management routes (profile, contacts, status)
   - Add message and chat room routes

@@ -5,6 +5,7 @@ import messageRoutes from './message/message.routes';
 import chatroomRoutes from './chatroom/chatroom.routes';
 import notificationRoutes from './notification/notification.routes';
 import groupRoutes from './group/group.routes';
+import { offlineRoutes } from './websocket/offline.routes';
 
 const router = Router();
 
@@ -24,5 +25,6 @@ router.use('/messages', messageRoutes);
 router.use('/chatrooms', chatroomRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/groups', groupRoutes);
+router.use('/offline', offlineRoutes);
 
 export default router;

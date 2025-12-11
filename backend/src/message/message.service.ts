@@ -85,6 +85,9 @@ export class MessageService {
       
       // Broadcast message to all participants except sender
       const wsService = WebSocketService.getInstance();
+      const { OfflineService } = await import('../websocket/offline.service');
+      const offlineService = OfflineService.getInstance();
+      
       for (const participant of chatParticipants) {
         if (participant.userId !== data.senderId) {
           recipientIds.push(participant.userId);
@@ -95,16 +98,24 @@ export class MessageService {
             recipientUsernames[participant.userId] = participantUser.username;
           }
 
-          // Send real-time message notification
-          await wsService.sendMessageNotification(participant.userId, {
-            type: 'new_message',
-            message: apiMessage,
-            chatRoomId: data.chatRoomId
-          });
-
-          // Update message status to delivered for online users
+          // Check if user is online
           if (wsService.isUserOnline(participant.userId)) {
+            // Send real-time message notification
+            await wsService.sendMessageNotification(participant.userId, {
+              type: 'new_message',
+              message: apiMessage,
+              chatRoomId: data.chatRoomId
+            });
+
+            // Update message status to delivered for online users
             await this.updateMessageStatus(message.id, MESSAGE_STATUS.DELIVERED, participant.userId);
+          } else {
+            // Queue message for offline user
+            await offlineService.queueMessage(participant.userId, {
+              type: 'new_message',
+              message: apiMessage,
+              chatRoomId: data.chatRoomId
+            });
           }
         }
       }

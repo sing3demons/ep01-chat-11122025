@@ -30,6 +30,8 @@ model User {
   blockedUsers     BlockedUser[]            @relation("UserBlocked")
   blockedBy        BlockedUser[]            @relation("BlockedBy")
   hiddenChatRooms  HiddenChatRoom[]
+  queuedMessages   QueuedMessage[]
+  deviceSessions   DeviceSession[]
 
   @@map("users")
 }
@@ -163,4 +165,35 @@ model HiddenChatRoom {
 
   @@id([userId, chatRoomId])
   @@map("hidden_chat_rooms")
+}
+
+model QueuedMessage {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  messageData  String   @map("message_data") @db.Text
+  retryCount   Int      @default(0) @map("retry_count")
+  maxRetries   Int      @default(5) @map("max_retries")
+  nextRetryAt  DateTime @default(now()) @map("next_retry_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("queued_messages")
+}
+
+model DeviceSession {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  deviceId     String   @map("device_id") @db.VarChar(255)
+  connectionId String?  @map("connection_id") @db.VarChar(255)
+  isActive     Boolean  @default(true) @map("is_active")
+  lastSyncAt   DateTime @default(now()) @map("last_sync_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, deviceId])
+  @@map("device_sessions")
 }

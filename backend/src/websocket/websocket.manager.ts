@@ -3,6 +3,8 @@ import { IncomingMessage } from 'http';
 import { JWTUtils } from '../utils/jwt';
 import { AuthService } from '../auth/auth.service';
 import { UserService } from '../user/user.service';
+import { OfflineService } from './offline.service';
+import { ReconnectionManager } from './reconnection.manager';
 
 export interface WebSocketConnection {
   id: string;
@@ -36,6 +38,11 @@ export class WebSocketManager {
   constructor(private wss: WebSocketServer) {
     this.setupHeartbeat();
     this.setupWebSocketServer();
+    
+    // Initialize offline support and reconnection manager
+    const offlineService = OfflineService.getInstance();
+    const reconnectionManager = ReconnectionManager.getInstance();
+    reconnectionManager.initialize(this);
   }
 
   /**
@@ -125,6 +132,10 @@ export class WebSocketManager {
           await this.handleAuthentication(connectionId, data.data);
           break;
 
+        case 'register_device':
+          await this.handleDeviceRegistration(connectionId, data.data);
+          break;
+
         case 'heartbeat':
           this.handleHeartbeat(connectionId);
           break;
@@ -156,6 +167,18 @@ export class WebSocketManager {
 
         case 'get_unread_count':
           await this.handleGetUnreadCount(connectionId, data.data);
+          break;
+
+        case 'retry_queued_message':
+          await this.handleRetryQueuedMessage(connectionId, data.data);
+          break;
+
+        case 'sync_devices':
+          await this.handleDeviceSync(connectionId);
+          break;
+
+        case 'connection_status_request':
+          await this.handleConnectionStatusRequest(connectionId);
           break;
 
         default:
@@ -226,6 +249,13 @@ export class WebSocketManager {
       // Mark messages as delivered for the user
       await this.markUserMessagesAsDelivered(user.id);
 
+      // Register connection for health monitoring
+      const reconnectionManager = ReconnectionManager.getInstance();
+      reconnectionManager.registerConnection(connection);
+
+      // Handle reconnection if this was a reconnection attempt
+      await reconnectionManager.handleSuccessfulReconnection(user.id, connectionId);
+
       console.log(`User ${user.username} authenticated on connection ${connectionId}`);
 
     } catch (error) {
@@ -242,6 +272,18 @@ export class WebSocketManager {
 
     const connection = this.connections.get(connectionId);
     if (!connection) return;
+
+    // Handle reconnection logic
+    const reconnectionManager = ReconnectionManager.getInstance();
+    if (connection.userId) {
+      await reconnectionManager.handleDisconnection(
+        connection.userId, 
+        connectionId, 
+        code, 
+        reason,
+        connection.userAgent // Use userAgent as deviceId for now
+      );
+    }
 
     // Remove from connections
     this.connections.delete(connectionId);
@@ -295,6 +337,10 @@ export class WebSocketManager {
     const connection = this.connections.get(connectionId);
     if (connection) {
       connection.lastHeartbeat = new Date();
+      
+      // Update connection health
+      const reconnectionManager = ReconnectionManager.getInstance();
+      reconnectionManager.updateConnectionHealth(connectionId, true);
     }
   }
 
@@ -688,5 +734,169 @@ export class WebSocketManager {
     } catch (error) {
       console.error('Error marking messages as delivered for user:', userId, error);
     }
+  }
+
+  /**
+   * Handle device registration for cross-device sync
+   */
+  private async handleDeviceRegistration(connectionId: string, deviceData: any): Promise<void> {
+    const connection = this.connections.get(connectionId);
+    if (!connection || !connection.isActive) {
+      this.sendError(connection?.socket, 'Not authenticated');
+      return;
+    }
+
+    try {
+      const { deviceId } = deviceData;
+      if (!deviceId) {
+        this.sendError(connection.socket, 'Device ID is required');
+        return;
+      }
+
+      const offlineService = OfflineService.getInstance();
+      const result = await offlineService.registerDeviceSession(
+        connection.userId,
+        deviceId,
+        connectionId
+      );
+
+      if (result.success) {
+        this.sendMessage(connection.socket, {
+          type: 'device_registered',
+          data: { deviceId },
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        this.sendError(connection.socket, result.error || 'Failed to register device');
+      }
+    } catch (error) {
+      console.error(`Error handling device registration from ${connectionId}:`, error);
+      this.sendError(connection.socket, 'Failed to register device');
+    }
+  }
+
+  /**
+   * Handle retry queued message request
+   */
+  private async handleRetryQueuedMessage(connectionId: string, retryData: any): Promise<void> {
+    const connection = this.connections.get(connectionId);
+    if (!connection || !connection.isActive) {
+      this.sendError(connection?.socket, 'Not authenticated');
+      return;
+    }
+
+    try {
+      const { queuedMessageId } = retryData;
+      if (!queuedMessageId) {
+        this.sendError(connection.socket, 'Queued message ID is required');
+        return;
+      }
+
+      const offlineService = OfflineService.getInstance();
+      const result = await offlineService.retryMessageDelivery(queuedMessageId);
+
+      if (result.success) {
+        this.sendMessage(connection.socket, {
+          type: 'queued_message_retry_success',
+          data: result.data,
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        this.sendError(connection.socket, result.error || 'Failed to retry message delivery');
+      }
+    } catch (error) {
+      console.error(`Error handling retry queued message from ${connectionId}:`, error);
+      this.sendError(connection.socket, 'Failed to retry message delivery');
+    }
+  }
+
+  /**
+   * Handle device synchronization request
+   */
+  private async handleDeviceSync(connectionId: string): Promise<void> {
+    const connection = this.connections.get(connectionId);
+    if (!connection || !connection.isActive) {
+      this.sendError(connection?.socket, 'Not authenticated');
+      return;
+    }
+
+    try {
+      const offlineService = OfflineService.getInstance();
+      const result = await offlineService.synchronizeUserDevices(connection.userId);
+
+      if (result.success) {
+        this.sendMessage(connection.socket, {
+          type: 'device_sync_complete',
+          data: result.data,
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        this.sendError(connection.socket, result.error || 'Failed to sync devices');
+      }
+    } catch (error) {
+      console.error(`Error handling device sync from ${connectionId}:`, error);
+      this.sendError(connection.socket, 'Failed to sync devices');
+    }
+  }
+
+  /**
+   * Handle connection status request
+   */
+  private async handleConnectionStatusRequest(connectionId: string): Promise<void> {
+    const connection = this.connections.get(connectionId);
+    if (!connection) return;
+
+    try {
+      const reconnectionManager = ReconnectionManager.getInstance();
+      const offlineService = OfflineService.getInstance();
+      
+      const connectionHealth = reconnectionManager.getConnectionHealth(connectionId);
+      const queuedMessages = connection.isActive ? 
+        offlineService.getQueuedMessages(connection.userId) : [];
+      const deviceSessions = connection.isActive ? 
+        offlineService.getDeviceSessions(connection.userId) : [];
+
+      this.sendMessage(connection.socket, {
+        type: 'connection_status_response',
+        data: {
+          connectionId,
+          isAuthenticated: connection.isActive,
+          health: connectionHealth,
+          queuedMessagesCount: queuedMessages.length,
+          activeDevices: deviceSessions.filter(s => s.isActive).length,
+          timestamp: new Date().toISOString()
+        },
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error(`Error handling connection status request from ${connectionId}:`, error);
+      this.sendError(connection.socket, 'Failed to get connection status');
+    }
+  }
+
+  /**
+   * Send message to offline user (queue it)
+   */
+  public async sendToOfflineUser(userId: string, messageData: any): Promise<void> {
+    try {
+      const offlineService = OfflineService.getInstance();
+      await offlineService.queueMessage(userId, messageData);
+    } catch (error) {
+      console.error(`Error queuing message for offline user ${userId}:`, error);
+    }
+  }
+
+  /**
+   * Get offline support statistics
+   */
+  public getOfflineStats(): any {
+    const offlineService = OfflineService.getInstance();
+    const reconnectionManager = ReconnectionManager.getInstance();
+    
+    return {
+      offline: offlineService.getOfflineStats(),
+      reconnection: reconnectionManager.getReconnectionStats(),
+      connections: this.getConnectionStats()
+    };
   }
 }
