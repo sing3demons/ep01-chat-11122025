@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import GroupManager from '../GroupManager';
-import { ChatRoom } from '../../types/index.ts 22-32-13-426';
+import { ChatRoom } from '../../types/index';
 
 // Mock WebSocket context
 const mockWebSocketContext = {

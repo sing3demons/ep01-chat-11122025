@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ContactListProps } from '../interfaces/components';
-import { User } from '../types/index.ts 22-32-13-426';
+import { User } from '../types/index';
 import './ContactList.css';
 
 const ContactList: React.FC<ContactListProps> = ({

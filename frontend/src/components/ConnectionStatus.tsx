@@ -5,14 +5,22 @@ import './ConnectionStatus.css';
 
 interface ConnectionStatusProps {
   showDetails?: boolean;
+  showOfflineQueue?: boolean;
   className?: string;
 }
 
 const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ 
-  showDetails = false, 
+  showDetails = false,
+  showOfflineQueue = false,
   className = '' 
 }) => {
-  const { connectionStatus, reconnectAttempts, isConnected } = useWebSocket();
+  const { 
+    connectionStatus, 
+    reconnectAttempts, 
+    isConnected, 
+    offlineQueueStats,
+    clearFailedMessages 
+  } = useWebSocket();
 
   const getStatusText = () => {
     switch (connectionStatus) {
@@ -43,8 +51,11 @@ const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
     }
   };
 
-  if (!showDetails && isConnected) {
-    // Only show when there are connection issues
+  const hasQueuedMessages = offlineQueueStats.total > 0;
+  const hasFailedMessages = offlineQueueStats.failed > 0;
+
+  if (!showDetails && isConnected && !hasQueuedMessages) {
+    // Only show when there are connection issues or queued messages
     return null;
   }
 
@@ -62,6 +73,38 @@ const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
       {!isConnected && connectionStatus !== 'connecting' && (
         <div className="connection-warning">
           <small>Messages may not be delivered until connection is restored</small>
+        </div>
+      )}
+
+      {showOfflineQueue && hasQueuedMessages && (
+        <div className="offline-queue-info">
+          <div className="queue-stats">
+            {offlineQueueStats.queued > 0 && (
+              <span className="queue-stat queued">
+                📤 {offlineQueueStats.queued} queued
+              </span>
+            )}
+            {offlineQueueStats.sending > 0 && (
+              <span className="queue-stat sending">
+                ⏳ {offlineQueueStats.sending} sending
+              </span>
+            )}
+            {offlineQueueStats.failed > 0 && (
+              <span className="queue-stat failed">
+                ❌ {offlineQueueStats.failed} failed
+              </span>
+            )}
+          </div>
+          
+          {hasFailedMessages && (
+            <button 
+              className="clear-failed-btn"
+              onClick={clearFailedMessages}
+              title="Clear failed messages"
+            >
+              Clear Failed
+            </button>
+          )}
         </div>
       )}
     </div>

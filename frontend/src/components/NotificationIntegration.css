@@ -1,0 +1,86 @@
+/* NotificationIntegration styles */
+.notification-integration {
+  position: relative;
+}
+
+/* Settings overlay */
+.notification-settings-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 20px;
+}
+
+.notification-settings-modal {
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+/* Settings trigger button */
+.notification-settings-trigger {
+  position: fixed;
+  bottom: 20px;
+  right: 80px;
+  background: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 45px;
+  height: 45px;
+  font-size: 18px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.notification-settings-trigger:hover {
+  background: #5a6268;
+  transform: scale(1.05);
+}
+
+.notification-settings-trigger:active {
+  transform: scale(0.95);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .notification-settings-overlay {
+    padding: 0;
+  }
+  
+  .notification-settings-modal {
+    max-width: 100vw;
+    max-height: 100vh;
+  }
+  
+  .notification-settings-trigger {
+    bottom: 80px;
+    right: 20px;
+  }
+}
+
+/* Animation for overlay */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.notification-settings-overlay {
+  animation: fadeIn 0.3s ease;
+}

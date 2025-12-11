@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ChatRoom, User } from '../types/index.ts 22-32-13-426';
+import { ChatRoom, User } from '../types/index';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import './GroupManager.css';
 

@@ -1,12 +1,17 @@
 // WebSocket service for managing real-time connections
-import { Message, TypingIndicator, User, ConnectionStatus } from '../types/index.ts 22-32-13-426';
+import type { Message, TypingIndicator, User, ConnectionStatus, Notification } from '../types/index';
+import { offlineService, QueuedMessage } from './offline.service';
 
 export interface WebSocketEventHandlers {
   onMessage: (message: Message) => void;
   onTyping: (indicator: TypingIndicator) => void;
   onUserStatusUpdate: (user: User) => void;
   onMessageStatusUpdate: (messageId: string, status: 'delivered' | 'read') => void;
+  onNotification: (notification: Notification) => void;
   onConnectionStatusChange: (status: ConnectionStatus) => void;
+  onMessageQueued: (message: QueuedMessage) => void;
+  onMessageRetry: (messageId: string, retryCount: number) => void;
+  onMessageFailed: (messageId: string, error: string) => void;
 }
 
 class WebSocketService {
@@ -25,6 +30,27 @@ class WebSocketService {
 
   constructor(url: string = 'ws://localhost:3001') {
     this.url = url;
+    
+    // Initialize offline service
+    offlineService.loadQueueFromStorage();
+    offlineService.setHandlers({
+      onMessageQueued: (message) => {
+        if (this.handlers.onMessageQueued) {
+          this.handlers.onMessageQueued(message);
+        }
+      },
+      onMessageSent: (messageId) => {
+        console.log('Queued message sent successfully:', messageId);
+      },
+      onMessageFailed: (messageId, error) => {
+        if (this.handlers.onMessageFailed) {
+          this.handlers.onMessageFailed(messageId, error);
+        }
+      },
+      onQueueProcessed: () => {
+        console.log('Message queue processed');
+      }
+    });
   }
 
   // Set authentication token
@@ -55,6 +81,10 @@ class WebSocketService {
           
           this.startHeartbeat();
           this.notifyConnectionStatus();
+          
+          // Process queued messages when connection is restored
+          this.processOfflineQueue();
+          
           resolve();
         };
 
@@ -113,15 +143,22 @@ class WebSocketService {
 
   // Send chat message
   sendMessage(content: string, chatRoomId: string, senderId: string) {
-    return this.send({
-      type: 'message',
-      payload: {
-        content,
-        chatRoomId,
-        senderId,
-        timestamp: new Date().toISOString()
-      }
-    });
+    if (this.isConnected()) {
+      return this.send({
+        type: 'message',
+        payload: {
+          content,
+          chatRoomId,
+          senderId,
+          timestamp: new Date().toISOString()
+        }
+      });
+    } else {
+      // Queue message for offline sending
+      const queuedMessage = offlineService.queueMessage(content, chatRoomId, senderId);
+      console.log('Message queued for offline sending:', queuedMessage.id);
+      return true; // Return true to indicate message was handled (queued)
+    }
   }
 
   // Send typing indicator
@@ -195,6 +232,16 @@ class WebSocketService {
         }
         break;
 
+      case 'notification':
+        if (this.handlers.onNotification) {
+          const notification: Notification = {
+            ...data.payload,
+            createdAt: new Date(data.payload.createdAt)
+          };
+          this.handlers.onNotification(notification);
+        }
+        break;
+
       case 'pong':
         // Heartbeat response - connection is alive
         break;
@@ -242,6 +289,40 @@ class WebSocketService {
     if (this.handlers.onConnectionStatusChange) {
       this.handlers.onConnectionStatusChange(this.connectionStatus);
     }
+  }
+
+  // Process offline message queue
+  private async processOfflineQueue() {
+    try {
+      await offlineService.processQueue((content, chatRoomId, senderId) => {
+        return this.send({
+          type: 'message',
+          payload: {
+            content,
+            chatRoomId,
+            senderId,
+            timestamp: new Date().toISOString()
+          }
+        });
+      });
+    } catch (error) {
+      console.error('Error processing offline queue:', error);
+    }
+  }
+
+  // Get offline queue statistics
+  getOfflineQueueStats() {
+    return offlineService.getQueueStats();
+  }
+
+  // Clear failed messages from queue
+  clearFailedMessages() {
+    offlineService.clearFailedMessages();
+  }
+
+  // Get queued messages for a specific chat
+  getQueuedMessagesForChat(chatRoomId: string) {
+    return offlineService.getQueuedMessagesForChat(chatRoomId);
   }
 }
 

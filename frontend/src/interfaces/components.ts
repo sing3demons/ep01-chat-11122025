@@ -1,6 +1,6 @@
 // Component interface definitions
 
-import { Message, User, ChatRoom, Notification, NotificationSettings, TypingIndicator } from '../types/index.ts 22-32-13-426';
+import { Message, User, ChatRoom, Notification, NotificationSettings, TypingIndicator } from '../types/index';
 
 export interface ChatInterfaceProps {
   currentUser: User;

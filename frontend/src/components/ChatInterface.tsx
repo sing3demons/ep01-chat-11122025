@@ -1,12 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { ChatInterfaceProps } from '../interfaces/components';
-import { ChatRoom, Message, TypingIndicator, User } from '../types/index.ts 22-32-13-426';
+import { ChatRoom, Message, TypingIndicator, User } from '../types/index';
 import { useWebSocket } from '../contexts/WebSocketContext';
+import { useOfflineSupport } from '../hooks/useOfflineSupport';
 import MessageList from './MessageList';
 import MessageInput from './MessageInput';
 import ContactList from './ContactList';
 import ConnectionStatus from './ConnectionStatus';
 import GroupManager from './GroupManager';
+import ChatManager from './ChatManager';
+import NotificationIntegration from './NotificationIntegration';
+import NotificationBadge from './NotificationBadge';
+import UserProfile from './UserProfile';
+import { useNotifications } from '../contexts/NotificationContext';
 import './ChatInterface.css';
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({
@@ -17,7 +23,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [messages, setMessages] = useState<Message[]>([]);
   const [typingIndicators, setTypingIndicators] = useState<TypingIndicator[]>([]);
   const [contacts, setContacts] = useState<User[]>([]);
+  const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
+  const [blockedUsers, setBlockedUsers] = useState<User[]>([]);
   const [showGroupManager, setShowGroupManager] = useState(false);
+  const [showChatManager, setShowChatManager] = useState(false);
+  const [showUserProfile, setShowUserProfile] = useState(false);
+  
+  // Notification integration
+  const { unreadCount } = useNotifications();
   
   // WebSocket integration
   const { 
@@ -30,6 +43,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     onUserStatusUpdate,
     onMessageStatusUpdate
   } = useWebSocket();
+
+  // Offline support
+  const {
+    isOnline,
+    hasQueuedMessages,
+    shouldShowConnectionWarning,
+    getQueueSummaryText
+  } = useOfflineSupport(selectedChatRoom?.id);
 
   // Initialize WebSocket event handlers
   useEffect(() => {
@@ -86,7 +107,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   // Mock data for development (fallback when WebSocket is not connected)
   useEffect(() => {
     // Mock contacts data
-    setContacts([
+    const mockContacts = [
       {
         id: '2',
         username: 'Alice Johnson',
@@ -100,31 +121,93 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         email: 'bob@example.com',
         isOnline: false,
         lastSeen: new Date(Date.now() - 300000) // 5 minutes ago
+      },
+      {
+        id: '4',
+        username: 'Charlie Brown',
+        email: 'charlie@example.com',
+        isOnline: true,
+        lastSeen: new Date()
+      }
+    ];
+    setContacts(mockContacts);
+
+    // Mock chat rooms data
+    setChatRooms([
+      {
+        id: 'direct_1_2',
+        type: 'direct',
+        participants: [currentUser.id, '2'],
+        createdAt: new Date(Date.now() - 86400000), // 1 day ago
+        lastMessageAt: new Date(Date.now() - 300000) // 5 minutes ago
+      },
+      {
+        id: 'direct_1_3',
+        type: 'direct',
+        participants: [currentUser.id, '3'],
+        createdAt: new Date(Date.now() - 172800000), // 2 days ago
+        lastMessageAt: new Date(Date.now() - 3600000) // 1 hour ago
+      },
+      {
+        id: 'group_1',
+        name: 'Team Chat',
+        type: 'group',
+        participants: [currentUser.id, '2', '3', '4'],
+        createdAt: new Date(Date.now() - 259200000), // 3 days ago
+        lastMessageAt: new Date(Date.now() - 600000) // 10 minutes ago
       }
     ]);
 
-    // Mock messages data if chat room is selected and not connected to WebSocket
-    if (selectedChatRoom && !isConnected) {
-      setMessages([
+    // Mock blocked users (empty initially)
+    setBlockedUsers([]);
+
+    // Mock messages data if not connected to WebSocket
+    if (!isConnected) {
+      const mockMessages = [
         {
           id: '1',
           content: 'Hello! How are you?',
           senderId: '2',
-          chatRoomId: selectedChatRoom.id,
+          chatRoomId: 'direct_1_2',
           timestamp: new Date(Date.now() - 600000), // 10 minutes ago
-          status: 'read'
+          status: 'read' as const
         },
         {
           id: '2',
           content: 'I\'m doing great, thanks for asking!',
           senderId: currentUser.id,
-          chatRoomId: selectedChatRoom.id,
+          chatRoomId: 'direct_1_2',
           timestamp: new Date(Date.now() - 300000), // 5 minutes ago
-          status: 'delivered'
+          status: 'delivered' as const
+        },
+        {
+          id: '3',
+          content: 'Hey, are we still meeting tomorrow?',
+          senderId: '3',
+          chatRoomId: 'direct_1_3',
+          timestamp: new Date(Date.now() - 3600000), // 1 hour ago
+          status: 'sent' as const
+        },
+        {
+          id: '4',
+          content: 'Welcome to the team chat!',
+          senderId: '2',
+          chatRoomId: 'group_1',
+          timestamp: new Date(Date.now() - 600000), // 10 minutes ago
+          status: 'delivered' as const
+        },
+        {
+          id: '5',
+          content: 'Thanks! Excited to be here.',
+          senderId: '4',
+          chatRoomId: 'group_1',
+          timestamp: new Date(Date.now() - 480000), // 8 minutes ago
+          status: 'read' as const
         }
-      ]);
+      ];
+      setMessages(mockMessages);
     }
-  }, [selectedChatRoom, currentUser.id, isConnected]);
+  }, [currentUser.id, isConnected]);
 
   // Clear messages when chat room changes
   useEffect(() => {
@@ -245,6 +328,53 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const handleAddContact = (email: string) => {
     // Mock add contact functionality
     console.log('Adding contact:', email);
+  };
+
+  // Chat management functions
+  const handleDeleteChat = (chatRoomId: string) => {
+    // Remove chat room from user's view (but keep for other participants)
+    setChatRooms(prev => prev.filter(room => room.id !== chatRoomId));
+    
+    // If the deleted chat was selected, clear selection
+    if (selectedChatRoom && selectedChatRoom.id === chatRoomId) {
+      onChatRoomSelect(undefined as any);
+    }
+    
+    console.log('Chat deleted:', chatRoomId);
+    // In real app, would call API to mark chat as deleted for current user
+  };
+
+  const handleBlockUser = (userId: string) => {
+    // Find the user to block
+    const userToBlock = contacts.find(contact => contact.id === userId);
+    if (!userToBlock) return;
+
+    // Add to blocked users
+    setBlockedUsers(prev => [...prev, userToBlock]);
+    
+    // Remove direct chats with blocked user
+    setChatRooms(prev => prev.filter(room => {
+      if (room.type === 'direct') {
+        return !room.participants.includes(userId);
+      }
+      return true; // Keep group chats
+    }));
+
+    // Clear selection if current chat is with blocked user
+    if (selectedChatRoom && selectedChatRoom.participants.includes(userId)) {
+      onChatRoomSelect(undefined as any);
+    }
+    
+    console.log('User blocked:', userId);
+    // In real app, would call API to block user
+  };
+
+  const handleUnblockUser = (userId: string) => {
+    // Remove from blocked users
+    setBlockedUsers(prev => prev.filter(user => user.id !== userId));
+    
+    console.log('User unblocked:', userId);
+    // In real app, would call API to unblock user
   };
 
   // Group management functions
@@ -370,24 +500,72 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     <div className="chat-interface">
       <div className="chat-sidebar">
         <div className="user-info">
-          <div className="user-avatar">
-            {currentUser.username.charAt(0).toUpperCase()}
-          </div>
+          <button 
+            className="user-avatar-btn"
+            onClick={() => setShowUserProfile(true)}
+            title="View Profile"
+          >
+            <div className="user-avatar">
+              {currentUser.username.charAt(0).toUpperCase()}
+              {unreadCount > 0 && (
+                <NotificationBadge 
+                  count={unreadCount} 
+                  priority="normal"
+                  position="top-right"
+                  size="small"
+                />
+              )}
+            </div>
+          </button>
           <div className="user-details">
             <h3>{currentUser.username}</h3>
             <span className={`status ${currentUser.isOnline ? 'online' : 'offline'}`}>
               {currentUser.isOnline ? 'Online' : 'Offline'}
             </span>
           </div>
-          <ConnectionStatus className="compact" />
+          <ConnectionStatus 
+            className="compact" 
+            showDetails={true}
+            showOfflineQueue={hasQueuedMessages}
+          />
         </div>
         
-        <ContactList
-          contacts={contacts}
-          onContactSelect={handleContactSelect}
-          onAddContact={handleAddContact}
-          selectedContactId={selectedChatRoom?.participants.find((id: string) => id !== currentUser.id)}
-        />
+        <div className="sidebar-tabs">
+          <button
+            className={`tab-btn ${!showChatManager ? 'active' : ''}`}
+            onClick={() => setShowChatManager(false)}
+          >
+            Contacts
+          </button>
+          <button
+            className={`tab-btn ${showChatManager ? 'active' : ''}`}
+            onClick={() => setShowChatManager(true)}
+          >
+            Chats
+          </button>
+        </div>
+
+        {showChatManager ? (
+          <ChatManager
+            chatRooms={chatRooms}
+            contacts={contacts}
+            blockedUsers={blockedUsers}
+            messages={messages}
+            currentUserId={currentUser.id}
+            selectedChatRoomId={selectedChatRoom?.id}
+            onChatRoomSelect={onChatRoomSelect}
+            onDeleteChat={handleDeleteChat}
+            onBlockUser={handleBlockUser}
+            onUnblockUser={handleUnblockUser}
+          />
+        ) : (
+          <ContactList
+            contacts={contacts}
+            onContactSelect={handleContactSelect}
+            onAddContact={handleAddContact}
+            selectedContactId={selectedChatRoom?.participants.find((id: string) => id !== currentUser.id)}
+          />
+        )}
         
         <div className="group-management">
           <button 
@@ -436,8 +614,18 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
               onSendMessage={handleSendMessage}
               onTypingStart={handleTypingStart}
               onTypingStop={handleTypingStop}
-              disabled={!isConnected}
+              disabled={false} // Allow sending even when offline (will queue)
             />
+            
+            {shouldShowConnectionWarning() && (
+              <div className="connection-warning-banner">
+                <ConnectionStatus 
+                  showDetails={true} 
+                  showOfflineQueue={true}
+                  className="banner"
+                />
+              </div>
+            )}
           </>
         ) : (
           <div className="no-chat-selected">
@@ -476,6 +664,22 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           </div>
         </div>
       )}
+
+      {/* User Profile Modal */}
+      {showUserProfile && (
+        <UserProfile onClose={() => setShowUserProfile(false)} />
+      )}
+
+      {/* Notification Integration */}
+      <NotificationIntegration
+        onNotificationClick={(notification) => {
+          // Navigate to the chat room when notification is clicked
+          if (notification.chatRoomId) {
+            // In a real app, you would find the chat room and select it
+            console.log('Navigate to chat room:', notification.chatRoomId);
+          }
+        }}
+      />
     </div>
   );
 };

@@ -1,7 +1,8 @@
 // WebSocket React Context for managing WebSocket state across components
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { websocketService, WebSocketEventHandlers } from '../services/websocket.service';
-import { Message, TypingIndicator, User, ConnectionStatus } from '../types/index.ts 22-32-13-426';
+import { QueuedMessage } from '../services/offline.service';
+import type { Message, TypingIndicator, User, ConnectionStatus, Notification } from '../types/index';
 
 interface WebSocketContextType {
   // Connection state
@@ -13,6 +14,11 @@ interface WebSocketContextType {
   messages: Message[];
   typingIndicators: TypingIndicator[];
   onlineUsers: User[];
+  notifications: Notification[];
+  
+  // Offline support
+  queuedMessages: QueuedMessage[];
+  offlineQueueStats: { total: number; queued: number; sending: number; failed: number };
   
   // Actions
   sendMessage: (content: string, chatRoomId: string, senderId: string) => boolean;
@@ -20,12 +26,15 @@ interface WebSocketContextType {
   sendMessageStatus: (messageId: string, status: 'delivered' | 'read') => boolean;
   connect: (token?: string) => Promise<void>;
   disconnect: () => void;
+  clearFailedMessages: () => void;
+  getQueuedMessagesForChat: (chatRoomId: string) => QueuedMessage[];
   
   // Event handlers
   onMessage: (handler: (message: Message) => void) => void;
   onTyping: (handler: (indicator: TypingIndicator) => void) => void;
   onUserStatusUpdate: (handler: (user: User) => void) => void;
   onMessageStatusUpdate: (handler: (messageId: string, status: 'delivered' | 'read') => void) => void;
+  onNotification: (handler: (notification: Notification) => void) => void;
 }
 
 const WebSocketContext = createContext<WebSocketContextType | null>(null);
@@ -45,12 +54,16 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   const [messages, setMessages] = useState<Message[]>([]);
   const [typingIndicators, setTypingIndicators] = useState<TypingIndicator[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<User[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [queuedMessages, setQueuedMessages] = useState<QueuedMessage[]>([]);
+  const [offlineQueueStats, setOfflineQueueStats] = useState({ total: 0, queued: 0, sending: 0, failed: 0 });
 
   // Event handler callbacks
   const [messageHandlers, setMessageHandlers] = useState<((message: Message) => void)[]>([]);
   const [typingHandlers, setTypingHandlers] = useState<((indicator: TypingIndicator) => void)[]>([]);
   const [userStatusHandlers, setUserStatusHandlers] = useState<((user: User) => void)[]>([]);
   const [messageStatusHandlers, setMessageStatusHandlers] = useState<((messageId: string, status: 'delivered' | 'read') => void)[]>([]);
+  const [notificationHandlers, setNotificationHandlers] = useState<((notification: Notification) => void)[]>([]);
 
   // Handle incoming messages
   const handleMessage = useCallback((message: Message) => {
@@ -109,6 +122,20 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     messageStatusHandlers.forEach(handler => handler(messageId, status));
   }, [messageStatusHandlers]);
 
+  // Handle notifications
+  const handleNotification = useCallback((notification: Notification) => {
+    setNotifications(prev => {
+      // Avoid duplicates
+      if (prev.some(n => n.id === notification.id)) {
+        return prev;
+      }
+      return [notification, ...prev];
+    });
+    
+    // Notify external handlers
+    notificationHandlers.forEach(handler => handler(notification));
+  }, [notificationHandlers]);
+
   // Handle connection status changes
   const handleConnectionStatusChange = useCallback((status: ConnectionStatus) => {
     setIsConnected(status.isConnected);
@@ -116,11 +143,46 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     
     if (status.isConnected) {
       setConnectionStatus('connected');
+      // Update queue stats when connected
+      updateQueueStats();
     } else if (status.reconnectAttempts > 0) {
       setConnectionStatus('reconnecting');
     } else {
       setConnectionStatus('disconnected');
     }
+  }, []);
+
+  // Handle queued messages
+  const handleMessageQueued = useCallback((message: QueuedMessage) => {
+    setQueuedMessages(prev => [...prev, message]);
+    updateQueueStats();
+  }, []);
+
+  // Handle message retry
+  const handleMessageRetry = useCallback((messageId: string, retryCount: number) => {
+    setQueuedMessages(prev => 
+      prev.map(msg => 
+        msg.id === messageId ? { ...msg, retryCount, status: 'sending' as const } : msg
+      )
+    );
+    updateQueueStats();
+  }, []);
+
+  // Handle message failure
+  const handleMessageFailed = useCallback((messageId: string, error: string) => {
+    setQueuedMessages(prev => 
+      prev.map(msg => 
+        msg.id === messageId ? { ...msg, status: 'failed' as const } : msg
+      )
+    );
+    updateQueueStats();
+    console.error(`Message ${messageId} failed:`, error);
+  }, []);
+
+  // Update queue statistics
+  const updateQueueStats = useCallback(() => {
+    const stats = websocketService.getOfflineQueueStats();
+    setOfflineQueueStats(stats);
   }, []);
 
   // Initialize WebSocket service
@@ -130,15 +192,22 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
       onTyping: handleTyping,
       onUserStatusUpdate: handleUserStatusUpdate,
       onMessageStatusUpdate: handleMessageStatusUpdate,
-      onConnectionStatusChange: handleConnectionStatusChange
+      onNotification: handleNotification,
+      onConnectionStatusChange: handleConnectionStatusChange,
+      onMessageQueued: handleMessageQueued,
+      onMessageRetry: handleMessageRetry,
+      onMessageFailed: handleMessageFailed
     };
 
     websocketService.setHandlers(handlers);
 
+    // Initialize queue stats
+    updateQueueStats();
+
     return () => {
       websocketService.disconnect();
     };
-  }, [handleMessage, handleTyping, handleUserStatusUpdate, handleMessageStatusUpdate, handleConnectionStatusChange]);
+  }, [handleMessage, handleTyping, handleUserStatusUpdate, handleMessageStatusUpdate, handleNotification, handleConnectionStatusChange, handleMessageQueued, handleMessageRetry, handleMessageFailed, updateQueueStats]);
 
   // Connect to WebSocket
   const connect = useCallback(async (token?: string) => {
@@ -192,6 +261,21 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     setMessageStatusHandlers(prev => [...prev, handler]);
   }, []);
 
+  const onNotification = useCallback((handler: (notification: Notification) => void) => {
+    setNotificationHandlers(prev => [...prev, handler]);
+  }, []);
+
+  // Clear failed messages
+  const clearFailedMessages = useCallback(() => {
+    websocketService.clearFailedMessages();
+    updateQueueStats();
+  }, [updateQueueStats]);
+
+  // Get queued messages for chat
+  const getQueuedMessagesForChat = useCallback((chatRoomId: string) => {
+    return websocketService.getQueuedMessagesForChat(chatRoomId);
+  }, []);
+
   const contextValue: WebSocketContextType = {
     isConnected,
     connectionStatus,
@@ -199,15 +283,21 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     messages,
     typingIndicators,
     onlineUsers,
+    notifications,
+    queuedMessages,
+    offlineQueueStats,
     sendMessage,
     sendTyping,
     sendMessageStatus,
     connect,
     disconnect,
+    clearFailedMessages,
+    getQueuedMessagesForChat,
     onMessage,
     onTyping,
     onUserStatusUpdate,
-    onMessageStatusUpdate
+    onMessageStatusUpdate,
+    onNotification
   };
 
   return (

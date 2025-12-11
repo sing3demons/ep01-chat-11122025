@@ -1,0 +1,144 @@
+/* NotificationBadge styles */
+.notification-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #dc3545;
+  color: white;
+  border-radius: 50%;
+  font-weight: bold;
+  font-size: 11px;
+  line-height: 1;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  position: absolute;
+  z-index: 10;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* Priority variants */
+.notification-badge.normal {
+  background: #007bff;
+}
+
+.notification-badge.high {
+  background: #dc3545;
+  animation: pulse 2s infinite;
+}
+
+/* Size variants */
+.notification-badge.small {
+  font-size: 9px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 2px;
+}
+
+.notification-badge.medium {
+  font-size: 11px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+}
+
+.notification-badge.large {
+  font-size: 13px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+}
+
+/* Position variants */
+.notification-badge.top-right {
+  top: -8px;
+  right: -8px;
+}
+
+.notification-badge.top-left {
+  top: -8px;
+  left: -8px;
+}
+
+.notification-badge.bottom-right {
+  bottom: -8px;
+  right: -8px;
+}
+
+.notification-badge.bottom-left {
+  bottom: -8px;
+  left: -8px;
+}
+
+/* Clickable state */
+.notification-badge.clickable {
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.notification-badge.clickable:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.notification-badge.clickable:active {
+  transform: scale(0.95);
+}
+
+.notification-badge.clickable:focus {
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
+}
+
+/* Pulse animation for high priority */
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+  }
+}
+
+/* Entrance animation */
+@keyframes badgeEnter {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.notification-badge {
+  animation: badgeEnter 0.3s ease;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .notification-badge.small {
+    font-size: 8px;
+    min-width: 12px;
+    height: 12px;
+  }
+  
+  .notification-badge.medium {
+    font-size: 10px;
+    min-width: 16px;
+    height: 16px;
+  }
+  
+  .notification-badge.large {
+    font-size: 12px;
+    min-width: 20px;
+    height: 20px;
+  }
+}

@@ -15,6 +15,7 @@ export interface User {
   email: string;
   isOnline: boolean;
   lastSeen: Date;
+  createdAt?: Date;
 }
 
 export interface ChatRoom {
@@ -62,4 +63,29 @@ export interface ConnectionStatus {
   isConnected: boolean;
   lastConnected?: Date;
   reconnectAttempts: number;
+}
+
+// Authentication types
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface RegisterRequest {
+  username: string;
+  email: string;
+  password: string;
+}
+
+export interface AuthResponse {
+  user: User;
+  token: string;
+}
+
+export interface AuthState {
+  isAuthenticated: boolean;
+  user: User | null;
+  token: string | null;
+  loading: boolean;
+  error: string | null;
 }

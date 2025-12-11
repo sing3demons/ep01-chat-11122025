@@ -1,0 +1,119 @@
+/* Message retry indicator styles */
+.message-retry-indicator {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  margin: 4px 0;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  border-left: 3px solid;
+  background-color: #f8f9fa;
+}
+
+.message-retry-indicator.queued {
+  border-left-color: #007bff;
+  background-color: #e3f2fd;
+}
+
+.message-retry-indicator.sending {
+  border-left-color: #ffc107;
+  background-color: #fff3e0;
+}
+
+.message-retry-indicator.failed {
+  border-left-color: #dc3545;
+  background-color: #ffebee;
+}
+
+.retry-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-icon {
+  font-size: 14px;
+}
+
+.message-retry-indicator.sending .status-icon {
+  animation: spin 1s linear infinite;
+}
+
+.status-text {
+  font-weight: 500;
+  color: #495057;
+}
+
+.retry-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.retry-btn,
+.cancel-btn {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.retry-btn {
+  background-color: #007bff;
+  color: white;
+}
+
+.retry-btn:hover {
+  background-color: #0056b3;
+}
+
+.cancel-btn {
+  background-color: #6c757d;
+  color: white;
+}
+
+.cancel-btn:hover {
+  background-color: #545b62;
+}
+
+.retry-btn:active,
+.cancel-btn:active {
+  transform: translateY(1px);
+}
+
+.message-timestamp {
+  font-size: 0.75rem;
+  color: #6c757d;
+  margin-top: 2px;
+}
+
+/* Animation for sending status */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Compact version for inline display */
+.message-retry-indicator.compact {
+  flex-direction: row;
+  align-items: center;
+  padding: 4px 8px;
+  margin: 2px 0;
+}
+
+.message-retry-indicator.compact .retry-actions {
+  margin-top: 0;
+  margin-left: auto;
+}
+
+.message-retry-indicator.compact .message-timestamp {
+  margin-top: 0;
+  margin-left: 8px;
+}

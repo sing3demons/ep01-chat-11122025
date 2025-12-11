@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ContactList from '../ContactList';
-import { User } from '../../types/index.ts 22-32-13-426';
+import { User } from '../../types/index';
 
 const mockContacts: User[] = [
   {

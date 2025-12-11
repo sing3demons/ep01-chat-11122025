@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageInputProps } from '../interfaces/components';
+import { useWebSocket } from '../contexts/WebSocketContext';
 import './MessageInput.css';
 
 const MessageInput: React.FC<MessageInputProps> = ({
@@ -14,6 +15,8 @@ const MessageInput: React.FC<MessageInputProps> = ({
   const [isTyping, setIsTyping] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  const { isConnected, connectionStatus, offlineQueueStats } = useWebSocket();
 
   // Focus input when chat room changes
   useEffect(() => {
@@ -74,6 +77,23 @@ const MessageInput: React.FC<MessageInputProps> = ({
     }
   };
 
+  const getPlaceholderText = () => {
+    if (disabled) return "Message input disabled";
+    if (!isConnected) {
+      if (connectionStatus === 'connecting') return "Connecting... Messages will be queued";
+      if (connectionStatus === 'reconnecting') return "Reconnecting... Messages will be queued";
+      return "Offline - Messages will be queued for sending";
+    }
+    return "Type a message...";
+  };
+
+  const getInputStatus = () => {
+    if (!isConnected && offlineQueueStats.total > 0) {
+      return `${offlineQueueStats.queued} queued, ${offlineQueueStats.failed} failed`;
+    }
+    return null;
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -102,9 +122,9 @@ const MessageInput: React.FC<MessageInputProps> = ({
             value={message}
             onChange={handleChange}
             onKeyPress={handleKeyPress}
-            placeholder={disabled ? "Connecting... Messages will be sent when connected" : "Type a message..."}
+            placeholder={getPlaceholderText()}
             disabled={disabled}
-            className="message-textarea"
+            className={`message-textarea ${!isConnected ? 'offline' : ''}`}
             rows={1}
             maxLength={1000}
           />
@@ -131,6 +151,13 @@ const MessageInput: React.FC<MessageInputProps> = ({
         </div>
         
         <div className="input-footer">
+          <div className="footer-left">
+            {getInputStatus() && (
+              <span className="queue-status">
+                {getInputStatus()}
+              </span>
+            )}
+          </div>
           <span className="character-count">
             {message.length}/1000
           </span>

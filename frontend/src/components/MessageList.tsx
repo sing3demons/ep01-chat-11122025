@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { MessageListProps } from '../interfaces/components';
-import { Message } from '../types/index.ts 22-32-13-426';
+import { Message } from '../types/index';
 import './MessageList.css';
 
 const MessageList: React.FC<MessageListProps> = ({

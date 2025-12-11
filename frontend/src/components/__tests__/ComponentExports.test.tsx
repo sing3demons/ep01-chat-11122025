@@ -2,7 +2,8 @@ import React from 'react';
 import { render } from '@testing-library/react';
 import { ChatInterface, MessageList, MessageInput, ContactList } from '../index';
 import { WebSocketProvider } from '../../contexts/WebSocketContext';
-import { User, ChatRoom, Message, TypingIndicator } from '../../types/index.ts 22-32-13-426';
+import { NotificationProvider } from '../../contexts/NotificationContext';
+import { User, ChatRoom, Message, TypingIndicator } from '../../types/index';
 
 // Mock data for testing component imports
 const mockUser: User = {
@@ -58,11 +59,13 @@ describe('Component Exports', () => {
   test('ChatInterface can be imported and rendered', () => {
     const { container } = render(
       <WebSocketProvider>
-        <ChatInterface
-          currentUser={mockUser}
-          selectedChatRoom={mockChatRoom}
-          onChatRoomSelect={jest.fn()}
-        />
+        <NotificationProvider>
+          <ChatInterface
+            currentUser={mockUser}
+            selectedChatRoom={mockChatRoom}
+            onChatRoomSelect={jest.fn()}
+          />
+        </NotificationProvider>
       </WebSocketProvider>
     );
     expect(container).toBeInTheDocument();
@@ -82,13 +85,15 @@ describe('Component Exports', () => {
 
   test('MessageInput can be imported and rendered', () => {
     const { container } = render(
-      <MessageInput
-        chatRoomId="1"
-        currentUserId="1"
-        onSendMessage={jest.fn()}
-        onTypingStart={jest.fn()}
-        onTypingStop={jest.fn()}
-      />
+      <WebSocketProvider>
+        <MessageInput
+          chatRoomId="1"
+          currentUserId="1"
+          onSendMessage={jest.fn()}
+          onTypingStart={jest.fn()}
+          onTypingStop={jest.fn()}
+        />
+      </WebSocketProvider>
     );
     expect(container).toBeInTheDocument();
   });

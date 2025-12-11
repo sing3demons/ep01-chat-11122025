@@ -70,9 +70,14 @@ describe('WebSocketService', () => {
     expect(result).toBe(true);
   });
 
-  test('should not send messages when disconnected', () => {
+  test('should queue messages when disconnected', () => {
     const result = service.sendMessage('Hello', 'room1', 'user1');
-    expect(result).toBe(false);
+    expect(result).toBe(true); // Now returns true because message is queued
+    
+    // Verify message was queued
+    const queueStats = service.getOfflineQueueStats();
+    expect(queueStats.total).toBe(1);
+    expect(queueStats.queued).toBe(1);
   });
 
   test('should handle typing indicators', async () => {
