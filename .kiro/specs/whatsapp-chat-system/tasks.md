@@ -35,7 +35,7 @@
   - Set up secure token handling
   - _Requirements: 7.3_
 
-- [ ]* 5.1 Write property test for authentication
+- [x] 5.1 Write property test for authentication
   - **Property 20: Authentication requirement**
   - **Validates: Requirements 7.3**
 
