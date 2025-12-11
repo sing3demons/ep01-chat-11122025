@@ -1,18 +1,52 @@
-import { ChatRoom, ChatRoomParticipant, User, Message } from '@prisma/client';
+import { ChatRoom, ChatRoomParticipant, User, Message, PrismaClient } from '@prisma/client';
 import prisma from '../config/database';
 import { CreateChatRoomData, UpdateChatRoomData, AddParticipantData } from './chatroom.model';
 import { CHAT_ROOM_TYPES, USER_ROLES } from '../config/constants';
+import { DefaultArgs } from '@prisma/client/runtime/library';
+
+export interface IChatRoomRepository {
+  createChatRoom(data: CreateChatRoomData): Promise<ChatRoom>;
+  getChatRoomById(id: string): Promise<ChatRoom | null>;
+  getChatRoomByIdWithParticipants(id: string): Promise<any>;
+  getChatRoomByIdWithDetails(id: string): Promise<any>;
+  updateChatRoom(id: string, data: UpdateChatRoomData): Promise<ChatRoom>;
+  deleteChatRoom(id: string): Promise<ChatRoom>;
+  getUserChatRooms(userId: string, limit?: number, offset?: number): Promise<any[]>;
+  findDirectChatBetweenUsers(userId1: string, userId2: string): Promise<ChatRoom | null>;
+  addParticipant(chatRoomId: string, data: AddParticipantData): Promise<ChatRoomParticipant>;
+  removeParticipant(chatRoomId: string, userId: string): Promise<ChatRoomParticipant>;
+  updateParticipantRole(chatRoomId: string, userId: string, role: string): Promise<ChatRoomParticipant>;
+  getChatRoomParticipants(chatRoomId: string): Promise<any[]>;
+  getParticipant(chatRoomId: string, userId: string): Promise<ChatRoomParticipant | null>;
+  isUserParticipant(chatRoomId: string, userId: string): Promise<boolean>;
+  isUserAdmin(chatRoomId: string, userId: string): Promise<boolean>;
+  verifyUsersExist(userIds: string[]): Promise<boolean>;
+  getChatRoomStatistics(chatRoomId: string): Promise<{
+    participantCount: number;
+    messageCount: number;
+    adminCount: number;
+    createdAt: Date;
+    lastActivity: Date;
+  }>;
+  searchChatRoomsByName(query: string, userId: string, limit?: number, offset?: number): Promise<ChatRoom[]>;
+  getActiveChatRooms(userId: string, hoursAgo?: number, limit?: number): Promise<ChatRoom[]>;
+  hideChatRoomForUser(chatRoomId: string, userId: string): Promise<void>;
+  unhideChatRoomForUser(chatRoomId: string, userId: string): Promise<void>;
+  isChatRoomHiddenForUser(chatRoomId: string, userId: string): Promise<boolean>;
+  getUserHiddenChatRooms(userId: string, limit?: number, offset?: number): Promise<any[]>;
+}
 
 /**
  * ChatRoom Repository
  * Handles all database operations related to chat rooms
  */
-export class ChatRoomRepository {
+export class ChatRoomRepository implements IChatRoomRepository {
+  constructor(private readonly prismaInstance = prisma) {}
   /**
    * Create a new chat room with participants
    */
-  static async createChatRoom(data: CreateChatRoomData): Promise<ChatRoom> {
-    return await prisma.$transaction(async (tx) => {
+  async createChatRoom(data: CreateChatRoomData): Promise<ChatRoom> {
+    return await this.prismaInstance.$transaction(async (tx) => {
       // Create chat room
       const chatRoom = await tx.chatRoom.create({
         data: {
@@ -42,8 +76,8 @@ export class ChatRoomRepository {
   /**
    * Get chat room by ID
    */
-  static async getChatRoomById(id: string): Promise<ChatRoom | null> {
-    return await prisma.chatRoom.findUnique({
+  async getChatRoomById(id: string): Promise<ChatRoom | null> {
+    return await this.prismaInstance.chatRoom.findUnique({
       where: { id }
     });
   }
@@ -51,8 +85,8 @@ export class ChatRoomRepository {
   /**
    * Get chat room by ID with participants
    */
-  static async getChatRoomByIdWithParticipants(id: string): Promise<any> {
-    return await prisma.chatRoom.findUnique({
+  async getChatRoomByIdWithParticipants(id: string): Promise<any> {
+    return await this.prismaInstance.chatRoom.findUnique({
       where: { id },
       include: {
         participants: {
@@ -77,8 +111,8 @@ export class ChatRoomRepository {
   /**
    * Get chat room by ID with full details
    */
-  static async getChatRoomByIdWithDetails(id: string): Promise<any> {
-    const chatRoom = await prisma.chatRoom.findUnique({
+  async getChatRoomByIdWithDetails(id: string): Promise<any> {
+    const chatRoom = await this.prismaInstance.chatRoom.findUnique({
       where: { id },
       include: {
         participants: {
@@ -129,8 +163,8 @@ export class ChatRoomRepository {
   /**
    * Update chat room
    */
-  static async updateChatRoom(id: string, data: UpdateChatRoomData): Promise<ChatRoom> {
-    return await prisma.chatRoom.update({
+  async updateChatRoom(id: string, data: UpdateChatRoomData): Promise<ChatRoom> {
+    return await this.prismaInstance.chatRoom.update({
       where: { id },
       data
     });
@@ -139,8 +173,8 @@ export class ChatRoomRepository {
   /**
    * Delete chat room
    */
-  static async deleteChatRoom(id: string): Promise<ChatRoom> {
-    return await prisma.chatRoom.delete({
+  async deleteChatRoom(id: string): Promise<ChatRoom> {
+    return await this.prismaInstance.chatRoom.delete({
       where: { id }
     });
   }
@@ -148,12 +182,12 @@ export class ChatRoomRepository {
   /**
    * Get user's chat rooms (excluding hidden ones)
    */
-  static async getUserChatRooms(
+  async getUserChatRooms(
     userId: string,
     limit: number = 20,
     offset: number = 0
   ): Promise<any[]> {
-    return await prisma.chatRoom.findMany({
+    return await this.prismaInstance.chatRoom.findMany({
       where: {
         AND: [
           {
@@ -224,8 +258,8 @@ export class ChatRoomRepository {
   /**
    * Find direct chat between two users
    */
-  static async findDirectChatBetweenUsers(userId1: string, userId2: string): Promise<ChatRoom | null> {
-    return await prisma.chatRoom.findFirst({
+  async findDirectChatBetweenUsers(userId1: string, userId2: string): Promise<ChatRoom | null> {
+    return await this.prismaInstance.chatRoom.findFirst({
       where: {
         type: CHAT_ROOM_TYPES.DIRECT,
         participants: {
@@ -258,8 +292,8 @@ export class ChatRoomRepository {
   /**
    * Add participant to chat room
    */
-  static async addParticipant(chatRoomId: string, data: AddParticipantData): Promise<ChatRoomParticipant> {
-    return await prisma.chatRoomParticipant.create({
+  async addParticipant(chatRoomId: string, data: AddParticipantData): Promise<ChatRoomParticipant> {
+    return await this.prismaInstance.chatRoomParticipant.create({
       data: {
         chatRoomId,
         userId: data.userId,
@@ -272,8 +306,8 @@ export class ChatRoomRepository {
   /**
    * Remove participant from chat room
    */
-  static async removeParticipant(chatRoomId: string, userId: string): Promise<ChatRoomParticipant> {
-    return await prisma.chatRoomParticipant.delete({
+  async removeParticipant(chatRoomId: string, userId: string): Promise<ChatRoomParticipant> {
+    return await this.prismaInstance.chatRoomParticipant.delete({
       where: {
         chatRoomId_userId: {
           chatRoomId,
@@ -286,12 +320,12 @@ export class ChatRoomRepository {
   /**
    * Update participant role
    */
-  static async updateParticipantRole(
+  async updateParticipantRole(
     chatRoomId: string,
     userId: string,
     role: string
   ): Promise<ChatRoomParticipant> {
-    return await prisma.chatRoomParticipant.update({
+    return await this.prismaInstance.chatRoomParticipant.update({
       where: {
         chatRoomId_userId: {
           chatRoomId,
@@ -305,8 +339,8 @@ export class ChatRoomRepository {
   /**
    * Get chat room participants
    */
-  static async getChatRoomParticipants(chatRoomId: string): Promise<any[]> {
-    return await prisma.chatRoomParticipant.findMany({
+  async getChatRoomParticipants(chatRoomId: string): Promise<any[]> {
+    return await this.prismaInstance.chatRoomParticipant.findMany({
       where: { chatRoomId },
       include: {
         user: {
@@ -327,8 +361,8 @@ export class ChatRoomRepository {
   /**
    * Get specific participant
    */
-  static async getParticipant(chatRoomId: string, userId: string): Promise<ChatRoomParticipant | null> {
-    return await prisma.chatRoomParticipant.findUnique({
+  async getParticipant(chatRoomId: string, userId: string): Promise<ChatRoomParticipant | null> {
+    return await this.prismaInstance.chatRoomParticipant.findUnique({
       where: {
         chatRoomId_userId: {
           chatRoomId,
@@ -341,7 +375,7 @@ export class ChatRoomRepository {
   /**
    * Check if user is participant in chat room
    */
-  static async isUserParticipant(chatRoomId: string, userId: string): Promise<boolean> {
+  async isUserParticipant(chatRoomId: string, userId: string): Promise<boolean> {
     const participant = await this.getParticipant(chatRoomId, userId);
     return participant !== null;
   }
@@ -349,7 +383,7 @@ export class ChatRoomRepository {
   /**
    * Check if user is admin in chat room
    */
-  static async isUserAdmin(chatRoomId: string, userId: string): Promise<boolean> {
+  async isUserAdmin(chatRoomId: string, userId: string): Promise<boolean> {
     const participant = await this.getParticipant(chatRoomId, userId);
     return participant?.role === USER_ROLES.ADMIN;
   }
@@ -357,8 +391,8 @@ export class ChatRoomRepository {
   /**
    * Verify that all users exist
    */
-  static async verifyUsersExist(userIds: string[]): Promise<boolean> {
-    const userCount = await prisma.user.count({
+  async verifyUsersExist(userIds: string[]): Promise<boolean> {
+    const userCount = await this.prismaInstance.user.count({
       where: {
         id: {
           in: userIds
@@ -372,7 +406,7 @@ export class ChatRoomRepository {
   /**
    * Get chat room statistics
    */
-  static async getChatRoomStatistics(chatRoomId: string): Promise<{
+  async getChatRoomStatistics(chatRoomId: string): Promise<{
     participantCount: number;
     messageCount: number;
     adminCount: number;
@@ -380,19 +414,19 @@ export class ChatRoomRepository {
     lastActivity: Date;
   }> {
     const [participantCount, messageCount, adminCount, chatRoom] = await Promise.all([
-      prisma.chatRoomParticipant.count({
+      this.prismaInstance.chatRoomParticipant.count({
         where: { chatRoomId }
       }),
-      prisma.message.count({
+      this.prismaInstance.message.count({
         where: { chatRoomId }
       }),
-      prisma.chatRoomParticipant.count({
+      this.prismaInstance.chatRoomParticipant.count({
         where: {
           chatRoomId,
           role: USER_ROLES.ADMIN
         }
       }),
-      prisma.chatRoom.findUnique({
+      this.prismaInstance.chatRoom.findUnique({
         where: { id: chatRoomId },
         select: {
           createdAt: true,
@@ -413,13 +447,13 @@ export class ChatRoomRepository {
   /**
    * Search chat rooms by name
    */
-  static async searchChatRoomsByName(
+  async searchChatRoomsByName(
     query: string,
     userId: string,
     limit: number = 20,
     offset: number = 0
   ): Promise<ChatRoom[]> {
-    return await prisma.chatRoom.findMany({
+    return await this.prismaInstance.chatRoom.findMany({
       where: {
         AND: [
           {
@@ -465,7 +499,7 @@ export class ChatRoomRepository {
   /**
    * Get active chat rooms (with recent messages)
    */
-  static async getActiveChatRooms(
+  async getActiveChatRooms(
     userId: string,
     hoursAgo: number = 24,
     limit: number = 10
@@ -473,7 +507,7 @@ export class ChatRoomRepository {
     const cutoffDate = new Date();
     cutoffDate.setHours(cutoffDate.getHours() - hoursAgo);
 
-    return await prisma.chatRoom.findMany({
+    return await this.prismaInstance.chatRoom.findMany({
       where: {
         participants: {
           some: {
@@ -494,8 +528,8 @@ export class ChatRoomRepository {
   /**
    * Hide chat room for user
    */
-  static async hideChatRoomForUser(chatRoomId: string, userId: string): Promise<void> {
-    await prisma.hiddenChatRoom.upsert({
+  async hideChatRoomForUser(chatRoomId: string, userId: string): Promise<void> {
+    await this.prismaInstance.hiddenChatRoom.upsert({
       where: {
         userId_chatRoomId: {
           userId,
@@ -516,8 +550,8 @@ export class ChatRoomRepository {
   /**
    * Unhide chat room for user
    */
-  static async unhideChatRoomForUser(chatRoomId: string, userId: string): Promise<void> {
-    await prisma.hiddenChatRoom.delete({
+  async unhideChatRoomForUser(chatRoomId: string, userId: string): Promise<void> {
+    await this.prismaInstance.hiddenChatRoom.delete({
       where: {
         userId_chatRoomId: {
           userId,
@@ -532,8 +566,8 @@ export class ChatRoomRepository {
   /**
    * Check if chat room is hidden for user
    */
-  static async isChatRoomHiddenForUser(chatRoomId: string, userId: string): Promise<boolean> {
-    const hidden = await prisma.hiddenChatRoom.findUnique({
+  async isChatRoomHiddenForUser(chatRoomId: string, userId: string): Promise<boolean> {
+    const hidden = await this.prismaInstance.hiddenChatRoom.findUnique({
       where: {
         userId_chatRoomId: {
           userId,
@@ -547,12 +581,12 @@ export class ChatRoomRepository {
   /**
    * Get user's hidden chat rooms
    */
-  static async getUserHiddenChatRooms(
+  async getUserHiddenChatRooms(
     userId: string,
     limit: number = 20,
     offset: number = 0
   ): Promise<any[]> {
-    return await prisma.chatRoom.findMany({
+    return await this.prismaInstance.chatRoom.findMany({
       where: {
         AND: [
           {

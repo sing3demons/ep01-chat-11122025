@@ -7,11 +7,12 @@ import { HTTP_STATUS } from '../config/constants';
  * Handles HTTP requests and responses for user operations
  */
 export class UserController {
+  constructor(private readonly userService: UserService) { }
   /**
    * Get user profile by ID
    * GET /users/:id
    */
-  static async getUserById(req: Request, res: Response): Promise<void> {
+  getUserById = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const currentUserId = req.user?.id;
@@ -24,7 +25,7 @@ export class UserController {
         return;
       }
 
-      const result = await UserService.getUserById(id, currentUserId);
+      const result = await this.userService.getUserById(id, currentUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -44,7 +45,7 @@ export class UserController {
    * Update user profile
    * PUT /users/:id
    */
-  static async updateUser(req: Request, res: Response): Promise<void> {
+  updateUser = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const currentUserId = req.user?.id;
@@ -65,7 +66,7 @@ export class UserController {
         return;
       }
 
-      const result = await UserService.updateUser(id, req.body);
+      const result = await this.userService.updateUser(id, req.body);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -85,7 +86,7 @@ export class UserController {
    * Search users by username
    * GET /users/search?q=username
    */
-  static async searchUsers(req: Request, res: Response): Promise<void> {
+  searchUsers = async (req: Request, res: Response): Promise<void> => {
     try {
       const { q: query, limit, offset } = req.query;
       const currentUserId = req.user?.id;
@@ -106,7 +107,7 @@ export class UserController {
         return;
       }
 
-      const result = await UserService.searchUsers(
+      const result = await this.userService.searchUsers(
         query,
         currentUserId,
         limit ? parseInt(limit as string) : undefined,
@@ -131,7 +132,7 @@ export class UserController {
    * Update user online status
    * POST /users/:id/status
    */
-  static async updateOnlineStatus(req: Request, res: Response): Promise<void> {
+  updateOnlineStatus = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const { isOnline } = req.body;
@@ -161,7 +162,7 @@ export class UserController {
         return;
       }
 
-      const result = await UserService.updateOnlineStatus(id, isOnline);
+      const result = await this.userService.updateOnlineStatus(id, isOnline);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -181,7 +182,7 @@ export class UserController {
    * Get user privacy settings
    * GET /users/:id/privacy
    */
-  static async getPrivacySettings(req: Request, res: Response): Promise<void> {
+  getPrivacySettings = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const currentUserId = req.user?.id;
@@ -202,7 +203,7 @@ export class UserController {
         return;
       }
 
-      const result = await UserService.getPrivacySettings(id);
+      const result = await this.userService.getPrivacySettings(id);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -222,7 +223,7 @@ export class UserController {
    * Update user privacy settings
    * PUT /users/:id/privacy
    */
-  static async updatePrivacySettings(req: Request, res: Response): Promise<void> {
+  updatePrivacySettings = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const currentUserId = req.user?.id;
@@ -243,7 +244,7 @@ export class UserController {
         return;
       }
 
-      const result = await UserService.updatePrivacySettings(id, req.body);
+      const result = await this.userService.updatePrivacySettings(id, req.body);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -263,7 +264,7 @@ export class UserController {
    * Get user's contacts
    * GET /users/:id/contacts
    */
-  static async getUserContacts(req: Request, res: Response): Promise<void> {
+  getUserContacts = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const currentUserId = req.user?.id;
@@ -284,7 +285,7 @@ export class UserController {
         return;
       }
 
-      const result = await UserService.getUserContacts(id);
+      const result = await this.userService.getUserContacts(id);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -304,7 +305,7 @@ export class UserController {
    * Add a contact
    * POST /users/:id/contacts
    */
-  static async addContact(req: Request, res: Response): Promise<void> {
+  addContact = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const { contactId } = req.body;
@@ -334,7 +335,7 @@ export class UserController {
         return;
       }
 
-      const result = await UserService.addContact(id, contactId);
+      const result = await this.userService.addContact(id, contactId);
 
       if (result.success) {
         res.status(HTTP_STATUS.CREATED).json(result);
@@ -354,7 +355,7 @@ export class UserController {
    * Remove a contact
    * DELETE /users/:id/contacts/:contactId
    */
-  static async removeContact(req: Request, res: Response): Promise<void> {
+  removeContact = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id, contactId } = req.params;
       const currentUserId = req.user?.id;
@@ -375,7 +376,7 @@ export class UserController {
         return;
       }
 
-      const result = await UserService.removeContact(id, contactId);
+      const result = await this.userService.removeContact(id, contactId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -395,7 +396,7 @@ export class UserController {
    * Block a user
    * POST /users/:id/blocked
    */
-  static async blockUser(req: Request, res: Response): Promise<void> {
+  blockUser = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const { blockedUserId } = req.body;
@@ -425,7 +426,7 @@ export class UserController {
         return;
       }
 
-      const result = await UserService.blockUser(id, blockedUserId);
+      const result = await this.userService.blockUser(id, blockedUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.CREATED).json(result);
@@ -445,7 +446,7 @@ export class UserController {
    * Unblock a user
    * DELETE /users/:id/blocked/:blockedUserId
    */
-  static async unblockUser(req: Request, res: Response): Promise<void> {
+  unblockUser = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id, blockedUserId } = req.params;
       const currentUserId = req.user?.id;
@@ -466,7 +467,7 @@ export class UserController {
         return;
       }
 
-      const result = await UserService.unblockUser(id, blockedUserId);
+      const result = await this.userService.unblockUser(id, blockedUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -486,7 +487,7 @@ export class UserController {
    * Get blocked users
    * GET /users/:id/blocked
    */
-  static async getBlockedUsers(req: Request, res: Response): Promise<void> {
+  getBlockedUsers = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const currentUserId = req.user?.id;
@@ -507,7 +508,7 @@ export class UserController {
         return;
       }
 
-      const result = await UserService.getBlockedUsers(id);
+      const result = await this.userService.getBlockedUsers(id);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -527,7 +528,7 @@ export class UserController {
    * Get mutual contacts
    * GET /users/:id/mutual/:otherUserId
    */
-  static async getMutualContacts(req: Request, res: Response): Promise<void> {
+  getMutualContacts = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id, otherUserId } = req.params;
       const currentUserId = req.user?.id;
@@ -548,7 +549,7 @@ export class UserController {
         return;
       }
 
-      const result = await UserService.getMutualContacts(id, otherUserId);
+      const result = await this.userService.getMutualContacts(id, otherUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);

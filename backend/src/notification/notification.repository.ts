@@ -2,16 +2,42 @@ import { Notification, NotificationSettings, ChatRoom } from '@prisma/client';
 import prisma from '../config/database';
 import { CreateNotificationData, UpdateNotificationData, UpdateNotificationSettingsData, NotificationQuery } from './notification.model';
 
+export interface INotificationRepository {
+  createNotification(data: CreateNotificationData): Promise<Notification>;
+  getNotificationById(id: string): Promise<Notification | null>;
+  getNotificationByIdWithChatRoom(id: string): Promise<any>;
+  updateNotification(id: string, data: UpdateNotificationData): Promise<Notification>;
+  deleteNotification(id: string): Promise<Notification>;
+  getUserNotifications(query: NotificationQuery): Promise<any[]>;
+  markAllAsRead(userId: string): Promise<number>;
+  getUnreadCount(userId: string): Promise<number>;
+  getUnreadCountByType(userId: string): Promise<{ type: string; count: number }[]>;
+  getNotificationSettings(userId: string): Promise<NotificationSettings | null>;
+  updateNotificationSettings(userId: string, data: UpdateNotificationSettingsData): Promise<NotificationSettings>;
+  verifyUserExists(userId: string): Promise<boolean>;
+  deleteOldNotifications(cutoffDate: Date): Promise<number>;
+  getRecentNotifications(userId: string, limit?: number): Promise<any[]>;
+  getHighPriorityUnreadNotifications(userId: string): Promise<Notification[]>;
+  deleteAllUserNotifications(userId: string): Promise<number>;
+  getNotificationStatistics(userId: string): Promise<{
+    total: number;
+    unread: number;
+    byType: { type: string; count: number }[];
+    byPriority: { priority: string; count: number }[];
+  }>;
+  bulkCreateNotifications(notifications: CreateNotificationData[]): Promise<number>;
+}
 /**
  * Notification Repository
  * Handles all database operations related to notifications
  */
-export class NotificationRepository {
+export class NotificationRepository implements INotificationRepository {
+  constructor(private readonly prismaInstance = prisma) {}
   /**
    * Create a new notification
    */
-  static async createNotification(data: CreateNotificationData): Promise<Notification> {
-    return await prisma.notification.create({
+  async createNotification(data: CreateNotificationData): Promise<Notification> {
+    return await this.prismaInstance.notification.create({
       data: {
         userId: data.userId,
         type: data.type,
@@ -27,8 +53,8 @@ export class NotificationRepository {
   /**
    * Get notification by ID
    */
-  static async getNotificationById(id: string): Promise<Notification | null> {
-    return await prisma.notification.findUnique({
+  async getNotificationById(id: string): Promise<Notification | null> {
+    return await this.prismaInstance.notification.findUnique({
       where: { id }
     });
   }
@@ -36,8 +62,8 @@ export class NotificationRepository {
   /**
    * Get notification by ID with chat room
    */
-  static async getNotificationByIdWithChatRoom(id: string): Promise<any> {
-    return await prisma.notification.findUnique({
+  async getNotificationByIdWithChatRoom(id: string): Promise<any> {
+    return await this.prismaInstance.notification.findUnique({
       where: { id },
       include: {
         chatRoom: {
@@ -57,8 +83,8 @@ export class NotificationRepository {
   /**
    * Update notification
    */
-  static async updateNotification(id: string, data: UpdateNotificationData): Promise<Notification> {
-    return await prisma.notification.update({
+  async updateNotification(id: string, data: UpdateNotificationData): Promise<Notification> {
+    return await this.prismaInstance.notification.update({
       where: { id },
       data
     });
@@ -67,8 +93,8 @@ export class NotificationRepository {
   /**
    * Delete notification
    */
-  static async deleteNotification(id: string): Promise<Notification> {
-    return await prisma.notification.delete({
+  async deleteNotification(id: string): Promise<Notification> {
+    return await this.prismaInstance.notification.delete({
       where: { id }
     });
   }
@@ -76,7 +102,7 @@ export class NotificationRepository {
   /**
    * Get user notifications
    */
-  static async getUserNotifications(query: NotificationQuery): Promise<any[]> {
+  async getUserNotifications(query: NotificationQuery): Promise<any[]> {
     const whereClause: any = {
       userId: query.userId
     };
@@ -105,7 +131,7 @@ export class NotificationRepository {
       }
     }
 
-    return await prisma.notification.findMany({
+    return await this.prismaInstance.notification.findMany({
       where: whereClause,
       include: {
         chatRoom: {
@@ -130,8 +156,8 @@ export class NotificationRepository {
   /**
    * Mark all notifications as read for user
    */
-  static async markAllAsRead(userId: string): Promise<number> {
-    const result = await prisma.notification.updateMany({
+  async markAllAsRead(userId: string): Promise<number> {
+    const result = await this.prismaInstance.notification.updateMany({
       where: {
         userId,
         isRead: false
@@ -147,8 +173,8 @@ export class NotificationRepository {
   /**
    * Get unread notification count for user
    */
-  static async getUnreadCount(userId: string): Promise<number> {
-    return await prisma.notification.count({
+  async getUnreadCount(userId: string): Promise<number> {
+    return await this.prismaInstance.notification.count({
       where: {
         userId,
         isRead: false
@@ -159,8 +185,8 @@ export class NotificationRepository {
   /**
    * Get unread notifications by type for user
    */
-  static async getUnreadCountByType(userId: string): Promise<{ type: string; count: number }[]> {
-    const result = await prisma.notification.groupBy({
+  async getUnreadCountByType(userId: string): Promise<{ type: string; count: number }[]> {
+    const result = await this.prismaInstance.notification.groupBy({
       by: ['type'],
       where: {
         userId,
@@ -180,8 +206,8 @@ export class NotificationRepository {
   /**
    * Get notification settings for user
    */
-  static async getNotificationSettings(userId: string): Promise<NotificationSettings | null> {
-    return await prisma.notificationSettings.findUnique({
+  async getNotificationSettings(userId: string): Promise<NotificationSettings | null> {
+    return await this.prismaInstance.notificationSettings.findUnique({
       where: { userId }
     });
   }
@@ -189,11 +215,11 @@ export class NotificationRepository {
   /**
    * Update notification settings for user
    */
-  static async updateNotificationSettings(
+  async updateNotificationSettings(
     userId: string,
     data: UpdateNotificationSettingsData
   ): Promise<NotificationSettings> {
-    return await prisma.notificationSettings.upsert({
+    return await this.prismaInstance.notificationSettings.upsert({
       where: { userId },
       update: {
         ...data,
@@ -213,8 +239,8 @@ export class NotificationRepository {
   /**
    * Verify user exists
    */
-  static async verifyUserExists(userId: string): Promise<boolean> {
-    const user = await prisma.user.findUnique({
+  async verifyUserExists(userId: string): Promise<boolean> {
+    const user = await this.prismaInstance.user.findUnique({
       where: { id: userId },
       select: { id: true }
     });
@@ -225,8 +251,8 @@ export class NotificationRepository {
   /**
    * Delete old notifications
    */
-  static async deleteOldNotifications(cutoffDate: Date): Promise<number> {
-    const result = await prisma.notification.deleteMany({
+  async deleteOldNotifications(cutoffDate: Date): Promise<number> {
+    const result = await this.prismaInstance.notification.deleteMany({
       where: {
         createdAt: {
           lt: cutoffDate
@@ -241,11 +267,11 @@ export class NotificationRepository {
   /**
    * Get recent notifications for user
    */
-  static async getRecentNotifications(
+  async getRecentNotifications(
     userId: string,
     limit: number = 5
   ): Promise<any[]> {
-    return await prisma.notification.findMany({
+    return await this.prismaInstance.notification.findMany({
       where: { userId },
       include: {
         chatRoom: {
@@ -269,8 +295,8 @@ export class NotificationRepository {
   /**
    * Get high priority unread notifications
    */
-  static async getHighPriorityUnreadNotifications(userId: string): Promise<Notification[]> {
-    return await prisma.notification.findMany({
+  async getHighPriorityUnreadNotifications(userId: string): Promise<Notification[]> {
+    return await this.prismaInstance.notification.findMany({
       where: {
         userId,
         isRead: false,
@@ -287,8 +313,8 @@ export class NotificationRepository {
   /**
    * Delete all notifications for user
    */
-  static async deleteAllUserNotifications(userId: string): Promise<number> {
-    const result = await prisma.notification.deleteMany({
+  async deleteAllUserNotifications(userId: string): Promise<number> {
+    const result = await this.prismaInstance.notification.deleteMany({
       where: { userId }
     });
 
@@ -298,25 +324,25 @@ export class NotificationRepository {
   /**
    * Get notification statistics for user
    */
-  static async getNotificationStatistics(userId: string): Promise<{
+  async getNotificationStatistics(userId: string): Promise<{
     total: number;
     unread: number;
     byType: { type: string; count: number }[];
     byPriority: { priority: string; count: number }[];
   }> {
     const [total, unread, byType, byPriority] = await Promise.all([
-      prisma.notification.count({
+      this.prismaInstance.notification.count({
         where: { userId }
       }),
-      prisma.notification.count({
+      this.prismaInstance.notification.count({
         where: { userId, isRead: false }
       }),
-      prisma.notification.groupBy({
+      this.prismaInstance.notification.groupBy({
         by: ['type'],
         where: { userId },
         _count: { id: true }
       }),
-      prisma.notification.groupBy({
+      this.prismaInstance.notification.groupBy({
         by: ['priority'],
         where: { userId },
         _count: { id: true }
@@ -340,8 +366,8 @@ export class NotificationRepository {
   /**
    * Bulk create notifications
    */
-  static async bulkCreateNotifications(notifications: CreateNotificationData[]): Promise<number> {
-    const result = await prisma.notification.createMany({
+  async bulkCreateNotifications(notifications: CreateNotificationData[]): Promise<number> {
+    const result = await this.prismaInstance.notification.createMany({
       data: notifications.map(notification => ({
         userId: notification.userId,
         type: notification.type,

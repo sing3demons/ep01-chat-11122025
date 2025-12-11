@@ -9,10 +9,11 @@ import { ValidationUtils } from '../utils/validation';
  * Handles HTTP requests for offline support features
  */
 export class OfflineController {
+  constructor(private readonly offlineService: OfflineService) { }
   /**
    * Get queued messages for authenticated user
    */
-  static async getQueuedMessages(req: Request, res: Response): Promise<void> {
+  getQueuedMessages = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user?.id;
       if (!userId) {
@@ -23,7 +24,7 @@ export class OfflineController {
         return;
       }
 
-      const offlineService = OfflineService.getInstance();
+      const offlineService = this.offlineService;
       const queuedMessages = offlineService.getQueuedMessages(userId);
 
       res.json({
@@ -35,7 +36,7 @@ export class OfflineController {
             retryCount: msg.retryCount,
             maxRetries: msg.maxRetries,
             nextRetryAt: msg.nextRetryAt,
-            messagePreview: typeof msg.messageData === 'object' && msg.messageData.message 
+            messagePreview: typeof msg.messageData === 'object' && msg.messageData.message
               ? msg.messageData.message.content?.substring(0, 100) + '...'
               : 'Message data'
           }))
@@ -54,7 +55,7 @@ export class OfflineController {
   /**
    * Retry a specific queued message
    */
-  static async retryQueuedMessage(req: Request, res: Response): Promise<void> {
+  retryQueuedMessage = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user?.id;
       const { id } = req.params;
@@ -75,7 +76,7 @@ export class OfflineController {
         return;
       }
 
-      const offlineService = OfflineService.getInstance();
+      const offlineService = this.offlineService;
       const result = await offlineService.retryMessageDelivery(id);
 
       res.json(result);
@@ -92,7 +93,7 @@ export class OfflineController {
   /**
    * Delete a queued message
    */
-  static async deleteQueuedMessage(req: Request, res: Response): Promise<void> {
+  deleteQueuedMessage = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user?.id;
       const { id } = req.params;
@@ -131,7 +132,7 @@ export class OfflineController {
   /**
    * Get device sessions for authenticated user
    */
-  static async getDeviceSessions(req: Request, res: Response): Promise<void> {
+  getDeviceSessions = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user?.id;
       if (!userId) {
@@ -142,7 +143,7 @@ export class OfflineController {
         return;
       }
 
-      const offlineService = OfflineService.getInstance();
+      const offlineService = this.offlineService;
       const deviceSessions = offlineService.getDeviceSessions(userId);
 
       res.json({
@@ -169,7 +170,7 @@ export class OfflineController {
   /**
    * Register a new device session
    */
-  static async registerDeviceSession(req: Request, res: Response): Promise<void> {
+  registerDeviceSession = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user?.id;
       const { deviceId, connectionId } = req.body;
@@ -190,7 +191,7 @@ export class OfflineController {
         return;
       }
 
-      const offlineService = OfflineService.getInstance();
+      const offlineService = this.offlineService;
       const result = await offlineService.registerDeviceSession(userId, deviceId, connectionId);
 
       res.json(result);
@@ -207,7 +208,7 @@ export class OfflineController {
   /**
    * Update device session
    */
-  static async updateDeviceSession(req: Request, res: Response): Promise<void> {
+  updateDeviceSession = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user?.id;
       const { deviceId } = req.params;
@@ -239,7 +240,7 @@ export class OfflineController {
   /**
    * Delete device session
    */
-  static async deleteDeviceSession(req: Request, res: Response): Promise<void> {
+  deleteDeviceSession = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user?.id;
       const { deviceId } = req.params;
@@ -252,7 +253,7 @@ export class OfflineController {
         return;
       }
 
-      const offlineService = OfflineService.getInstance();
+      const offlineService = this.offlineService;
       const result = await offlineService.unregisterDeviceSession(userId, deviceId);
 
       res.json(result);
@@ -269,7 +270,7 @@ export class OfflineController {
   /**
    * Synchronize user devices
    */
-  static async syncDevices(req: Request, res: Response): Promise<void> {
+  syncDevices = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user?.id;
       if (!userId) {
@@ -280,7 +281,7 @@ export class OfflineController {
         return;
       }
 
-      const offlineService = OfflineService.getInstance();
+      const offlineService = this.offlineService;
       const result = await offlineService.synchronizeUserDevices(userId);
 
       res.json(result);
@@ -297,7 +298,7 @@ export class OfflineController {
   /**
    * Force reconnection for user
    */
-  static async forceReconnection(req: Request, res: Response): Promise<void> {
+  forceReconnection = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user?.id;
       const { reason } = req.body;
@@ -330,7 +331,7 @@ export class OfflineController {
   /**
    * Get offline support statistics
    */
-  static async getOfflineStats(req: Request, res: Response): Promise<void> {
+  getOfflineStats = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user?.id;
       if (!userId) {
@@ -341,7 +342,7 @@ export class OfflineController {
         return;
       }
 
-      const offlineService = OfflineService.getInstance();
+      const offlineService = this.offlineService;
       const reconnectionManager = ReconnectionManager.getInstance();
       const wsService = WebSocketService.getInstance();
 
@@ -373,7 +374,7 @@ export class OfflineController {
   /**
    * Get connection health information
    */
-  static async getConnectionHealth(req: Request, res: Response): Promise<void> {
+  getConnectionHealth = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user?.id;
       if (!userId) {

@@ -7,11 +7,12 @@ import { HTTP_STATUS } from '../config/constants';
  * Handles HTTP requests and responses for notification operations
  */
 export class NotificationController {
+  constructor(private readonly notificationService: NotificationService) {}
   /**
    * Get user notifications
    * GET /notifications
    */
-  static async getUserNotifications(req: Request, res: Response): Promise<void> {
+   getUserNotifications = async (req: Request, res: Response): Promise<void> => {
     try {
       const currentUserId = req.user?.id;
 
@@ -34,7 +35,7 @@ export class NotificationController {
         offset: req.query.offset ? parseInt(req.query.offset as string) : undefined
       };
 
-      const result = await NotificationService.getUserNotifications(query);
+      const result = await this.notificationService.getUserNotifications(query);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -54,7 +55,7 @@ export class NotificationController {
    * Create notification
    * POST /notifications
    */
-  static async createNotification(req: Request, res: Response): Promise<void> {
+  createNotification = async (req: Request, res: Response): Promise<void> => {
     try {
       const currentUserId = req.user?.id;
 
@@ -66,7 +67,7 @@ export class NotificationController {
         return;
       }
 
-      const result = await NotificationService.createNotification(req.body);
+      const result = await this.notificationService.createNotification(req.body);
 
       if (result.success) {
         res.status(HTTP_STATUS.CREATED).json(result);
@@ -86,7 +87,7 @@ export class NotificationController {
    * Mark notification as read
    * PUT /notifications/:id/read
    */
-  static async markAsRead(req: Request, res: Response): Promise<void> {
+  markAsRead = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const currentUserId = req.user?.id;
@@ -107,7 +108,7 @@ export class NotificationController {
         return;
       }
 
-      const result = await NotificationService.markAsRead(id, currentUserId);
+      const result = await this.notificationService.markAsRead(id, currentUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -127,7 +128,7 @@ export class NotificationController {
    * Mark all notifications as read
    * PUT /notifications/read-all
    */
-  static async markAllAsRead(req: Request, res: Response): Promise<void> {
+  markAllAsRead = async (req: Request, res: Response): Promise<void> => {
     try {
       const currentUserId = req.user?.id;
 
@@ -139,7 +140,7 @@ export class NotificationController {
         return;
       }
 
-      const result = await NotificationService.markAllAsRead(currentUserId);
+      const result = await this.notificationService.markAllAsRead(currentUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -159,7 +160,7 @@ export class NotificationController {
    * Delete notification
    * DELETE /notifications/:id
    */
-  static async deleteNotification(req: Request, res: Response): Promise<void> {
+  deleteNotification = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const currentUserId = req.user?.id;
@@ -180,7 +181,7 @@ export class NotificationController {
         return;
       }
 
-      const result = await NotificationService.deleteNotification(id, currentUserId);
+      const result = await this.notificationService.deleteNotification(id, currentUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -200,7 +201,7 @@ export class NotificationController {
    * Get notification settings
    * GET /notifications/settings
    */
-  static async getNotificationSettings(req: Request, res: Response): Promise<void> {
+  getNotificationSettings = async (req: Request, res: Response): Promise<void> => {
     try {
       const currentUserId = req.user?.id;
 
@@ -212,7 +213,7 @@ export class NotificationController {
         return;
       }
 
-      const result = await NotificationService.getNotificationSettings(currentUserId);
+      const result = await this.notificationService.getNotificationSettings(currentUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -232,7 +233,7 @@ export class NotificationController {
    * Update notification settings
    * PUT /notifications/settings
    */
-  static async updateNotificationSettings(req: Request, res: Response): Promise<void> {
+  updateNotificationSettings = async (req: Request, res: Response): Promise<void> => {
     try {
       const currentUserId = req.user?.id;
 
@@ -244,7 +245,7 @@ export class NotificationController {
         return;
       }
 
-      const result = await NotificationService.updateNotificationSettings(currentUserId, req.body);
+      const result = await this.notificationService.updateNotificationSettings(currentUserId, req.body);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -264,7 +265,7 @@ export class NotificationController {
    * Get unread notification count
    * GET /notifications/unread-count
    */
-  static async getUnreadCount(req: Request, res: Response): Promise<void> {
+  getUnreadCount = async (req: Request, res: Response): Promise<void> => {
     try {
       const currentUserId = req.user?.id;
 
@@ -276,7 +277,7 @@ export class NotificationController {
         return;
       }
 
-      const result = await NotificationService.getUnreadCount(currentUserId);
+      const result = await this.notificationService.getUnreadCount(currentUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -296,7 +297,7 @@ export class NotificationController {
    * Get unread notification count by type
    * GET /notifications/unread-count-by-type
    */
-  static async getUnreadCountByType(req: Request, res: Response): Promise<void> {
+  getUnreadCountByType = async (req: Request, res: Response): Promise<void> => {
     try {
       const currentUserId = req.user?.id;
 
@@ -308,7 +309,7 @@ export class NotificationController {
         return;
       }
 
-      const result = await NotificationService.getUnreadCountByType(currentUserId);
+      const result = await this.notificationService.getUnreadCountByType(currentUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -328,7 +329,7 @@ export class NotificationController {
    * Get notification badge data
    * GET /notifications/badge
    */
-  static async getNotificationBadgeData(req: Request, res: Response): Promise<void> {
+  getNotificationBadgeData = async (req: Request, res: Response): Promise<void> => {
     try {
       const currentUserId = req.user?.id;
 
@@ -340,7 +341,7 @@ export class NotificationController {
         return;
       }
 
-      const result = await NotificationService.getNotificationBadgeData(currentUserId);
+      const result = await this.notificationService.getNotificationBadgeData(currentUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);

@@ -1,4 +1,4 @@
-import { UserRepository } from './user.repository';
+import { UserRepository, IUserRepository } from './user.repository';
 import { UserModel, UpdateUserData, PrivacySettings } from './user.model';
 import { UserConverter } from './user.converter';
 import { ApiResponse } from '../types';
@@ -9,10 +9,11 @@ import { ValidationUtils } from '../utils/validation';
  * Handles business logic for user operations
  */
 export class UserService {
+  constructor(private readonly userRepository: IUserRepository) {}
   /**
    * Get user by ID with privacy filtering
    */
-  static async getUserById(userId: string, viewerId?: string): Promise<ApiResponse> {
+  async getUserById(userId: string, viewerId?: string): Promise<ApiResponse> {
     try {
       // Validate user ID
       if (!ValidationUtils.isValidUUID(userId)) {
@@ -23,7 +24,7 @@ export class UserService {
       }
 
       // Get user with privacy settings
-      const user = await UserRepository.findUserByIdWithPrivacy(userId);
+      const user = await this.userRepository.findUserByIdWithPrivacy(userId);
 
       if (!user) {
         return {
@@ -39,7 +40,7 @@ export class UserService {
       let filteredUser;
       if (viewerId && viewerId !== userId) {
         // Check if viewer is a contact
-        const isContact = await UserRepository.areUsersContacts(viewerId, userId);
+        const isContact = await this.userRepository.areUsersContacts(viewerId, userId);
         filteredUser = UserConverter.applyPrivacyFilter(userWithPrivacy, viewerId, isContact);
       } else {
         filteredUser = UserConverter.toApiUser(user);
@@ -62,7 +63,7 @@ export class UserService {
   /**
    * Update user profile
    */
-  static async updateUser(userId: string, updateData: UpdateUserData): Promise<ApiResponse> {
+  async updateUser(userId: string, updateData: UpdateUserData): Promise<ApiResponse> {
     try {
       // Validate user ID
       if (!ValidationUtils.isValidUUID(userId)) {
@@ -82,7 +83,7 @@ export class UserService {
       }
 
       // Check if user exists
-      const existingUser = await UserRepository.findUserById(userId);
+      const existingUser = await this.userRepository.findUserById(userId);
       if (!existingUser) {
         return {
           success: false,
@@ -92,7 +93,7 @@ export class UserService {
 
       // Check for email/username conflicts if updating them
       if (validation.sanitizedData?.email || validation.sanitizedData?.username) {
-        const conflictUser = await UserRepository.findUserByEmailOrUsername(
+        const conflictUser = await this.userRepository.findUserByEmailOrUsername(
           validation.sanitizedData.email || existingUser.email,
           validation.sanitizedData.username || existingUser.username
         );
@@ -107,7 +108,7 @@ export class UserService {
       }
 
       // Update user
-      const updatedUser = await UserRepository.updateUser(userId, validation.sanitizedData!);
+      const updatedUser = await this.userRepository.updateUser(userId, validation.sanitizedData!);
 
       // Convert to API format
       const apiUser = UserConverter.toApiUser(updatedUser);
@@ -130,7 +131,7 @@ export class UserService {
   /**
    * Search users by username
    */
-  static async searchUsers(
+  async searchUsers(
     query: string,
     viewerId: string,
     limit: number = 20,
@@ -162,7 +163,7 @@ export class UserService {
       }
 
       // Search users
-      const users = await UserRepository.searchUsersByUsername(sanitizedQuery, limit, offset);
+      const users = await this.userRepository.searchUsersByUsername(sanitizedQuery, limit, offset);
 
       // Convert to API format and apply privacy filtering
       const apiUsers = await Promise.all(users.map(async user => {
@@ -170,7 +171,7 @@ export class UserService {
         
         // Apply privacy filtering for other users
         if (user.id !== viewerId) {
-          const isContact = await UserRepository.areUsersContacts(viewerId, user.id);
+          const isContact = await this.userRepository.areUsersContacts(viewerId, user.id);
           return UserConverter.applyPrivacyFilter(userWithPrivacy, viewerId, isContact);
         }
         
@@ -201,7 +202,7 @@ export class UserService {
   /**
    * Update user online status
    */
-  static async updateOnlineStatus(userId: string, isOnline: boolean): Promise<ApiResponse> {
+  async updateOnlineStatus(userId: string, isOnline: boolean): Promise<ApiResponse> {
     try {
       // Validate user ID
       if (!ValidationUtils.isValidUUID(userId)) {
@@ -212,7 +213,7 @@ export class UserService {
       }
 
       // Update online status
-      const updatedUser = await UserRepository.updateUserOnlineStatus(userId, isOnline);
+      const updatedUser = await this.userRepository.updateUserOnlineStatus(userId, isOnline);
 
       // Convert to API format
       const apiUser = UserConverter.toApiUser(updatedUser);
@@ -246,7 +247,7 @@ export class UserService {
   /**
    * Get user privacy settings
    */
-  static async getPrivacySettings(userId: string): Promise<ApiResponse> {
+  async getPrivacySettings(userId: string): Promise<ApiResponse> {
     try {
       // Validate user ID
       if (!ValidationUtils.isValidUUID(userId)) {
@@ -257,7 +258,7 @@ export class UserService {
       }
 
       // Get privacy settings
-      const settings = await UserRepository.getPrivacySettings(userId);
+      const settings = await this.userRepository.getPrivacySettings(userId);
 
       if (!settings) {
         return {
@@ -286,7 +287,7 @@ export class UserService {
   /**
    * Update user privacy settings
    */
-  static async updatePrivacySettings(
+  async updatePrivacySettings(
     userId: string,
     updateData: Partial<PrivacySettings>
   ): Promise<ApiResponse> {
@@ -309,7 +310,7 @@ export class UserService {
       }
 
       // Update privacy settings
-      const updatedSettings = await UserRepository.updatePrivacySettings(userId, validation.sanitizedData!);
+      const updatedSettings = await this.userRepository.updatePrivacySettings(userId, validation.sanitizedData!);
 
       // Convert to API format
       const apiSettings = UserConverter.toApiPrivacySettings(updatedSettings);
@@ -332,14 +333,14 @@ export class UserService {
   /**
    * Check if users are contacts
    */
-  static async areUsersContacts(userId1: string, userId2: string): Promise<boolean> {
+  async areUsersContacts(userId1: string, userId2: string): Promise<boolean> {
     try {
       // Validate user IDs
       if (!ValidationUtils.isValidUUID(userId1) || !ValidationUtils.isValidUUID(userId2)) {
         return false;
       }
 
-      return await UserRepository.areUsersContacts(userId1, userId2);
+      return await this.userRepository.areUsersContacts(userId1, userId2);
     } catch (error) {
       console.error('Check contacts error:', error);
       return false;
@@ -349,7 +350,7 @@ export class UserService {
   /**
    * Get user's contact list
    */
-  static async getUserContacts(userId: string): Promise<ApiResponse> {
+  async getUserContacts(userId: string): Promise<ApiResponse> {
     try {
       // Validate user ID
       if (!ValidationUtils.isValidUUID(userId)) {
@@ -360,7 +361,7 @@ export class UserService {
       }
 
       // Get contacts
-      const contacts = await UserRepository.getUserContacts(userId);
+      const contacts = await this.userRepository.getUserContacts(userId);
 
       // Convert to API format with privacy filtering
       const apiContacts = contacts.map(contact => {
@@ -388,7 +389,7 @@ export class UserService {
   /**
    * Add a contact
    */
-  static async addContact(userId: string, contactId: string): Promise<ApiResponse> {
+  async addContact(userId: string, contactId: string): Promise<ApiResponse> {
     try {
       // Validate user IDs
       if (!ValidationUtils.isValidUUID(userId) || !ValidationUtils.isValidUUID(contactId)) {
@@ -407,7 +408,7 @@ export class UserService {
       }
 
       // Check if contact user exists
-      const contactUser = await UserRepository.findUserById(contactId);
+      const contactUser = await this.userRepository.findUserById(contactId);
       if (!contactUser) {
         return {
           success: false,
@@ -416,7 +417,7 @@ export class UserService {
       }
 
       // Check if already contacts
-      const areContacts = await UserRepository.areUsersContacts(userId, contactId);
+      const areContacts = await this.userRepository.areUsersContacts(userId, contactId);
       if (areContacts) {
         return {
           success: false,
@@ -425,8 +426,8 @@ export class UserService {
       }
 
       // Check if user is blocked
-      const isBlocked = await UserRepository.isUserBlocked(userId, contactId);
-      const isBlockedBy = await UserRepository.isBlockedBy(userId, contactId);
+      const isBlocked = await this.userRepository.isUserBlocked(userId, contactId);
+      const isBlockedBy = await this.userRepository.isBlockedBy(userId, contactId);
       
       if (isBlocked || isBlockedBy) {
         return {
@@ -436,10 +437,10 @@ export class UserService {
       }
 
       // Add contact
-      await UserRepository.addContact(userId, contactId);
+      await this.userRepository.addContact(userId, contactId);
 
       // Get updated contact with privacy settings
-      const updatedContact = await UserRepository.findUserByIdWithPrivacy(contactId);
+      const updatedContact = await this.userRepository.findUserByIdWithPrivacy(contactId);
       const apiContact = UserConverter.applyPrivacyFilter(
         UserConverter.toApiUserWithPrivacy(updatedContact!), 
         userId, 
@@ -464,7 +465,7 @@ export class UserService {
   /**
    * Remove a contact
    */
-  static async removeContact(userId: string, contactId: string): Promise<ApiResponse> {
+  async removeContact(userId: string, contactId: string): Promise<ApiResponse> {
     try {
       // Validate user IDs
       if (!ValidationUtils.isValidUUID(userId) || !ValidationUtils.isValidUUID(contactId)) {
@@ -475,7 +476,7 @@ export class UserService {
       }
 
       // Check if they are contacts
-      const areContacts = await UserRepository.areUsersContacts(userId, contactId);
+      const areContacts = await this.userRepository.areUsersContacts(userId, contactId);
       if (!areContacts) {
         return {
           success: false,
@@ -484,7 +485,7 @@ export class UserService {
       }
 
       // Remove contact
-      await UserRepository.removeContact(userId, contactId);
+      await this.userRepository.removeContact(userId, contactId);
 
       return {
         success: true,
@@ -503,7 +504,7 @@ export class UserService {
   /**
    * Block a user
    */
-  static async blockUser(userId: string, blockedUserId: string): Promise<ApiResponse> {
+  async blockUser(userId: string, blockedUserId: string): Promise<ApiResponse> {
     try {
       // Validate user IDs
       if (!ValidationUtils.isValidUUID(userId) || !ValidationUtils.isValidUUID(blockedUserId)) {
@@ -522,7 +523,7 @@ export class UserService {
       }
 
       // Check if user exists
-      const userToBlock = await UserRepository.findUserById(blockedUserId);
+      const userToBlock = await this.userRepository.findUserById(blockedUserId);
       if (!userToBlock) {
         return {
           success: false,
@@ -531,7 +532,7 @@ export class UserService {
       }
 
       // Check if already blocked
-      const isBlocked = await UserRepository.isUserBlocked(userId, blockedUserId);
+      const isBlocked = await this.userRepository.isUserBlocked(userId, blockedUserId);
       if (isBlocked) {
         return {
           success: false,
@@ -540,13 +541,13 @@ export class UserService {
       }
 
       // Remove from contacts if they are contacts
-      const areContacts = await UserRepository.areUsersContacts(userId, blockedUserId);
+      const areContacts = await this.userRepository.areUsersContacts(userId, blockedUserId);
       if (areContacts) {
-        await UserRepository.removeContact(userId, blockedUserId);
+        await this.userRepository.removeContact(userId, blockedUserId);
       }
 
       // Block user
-      await UserRepository.blockUser(userId, blockedUserId);
+      await this.userRepository.blockUser(userId, blockedUserId);
 
       return {
         success: true,
@@ -565,7 +566,7 @@ export class UserService {
   /**
    * Unblock a user
    */
-  static async unblockUser(userId: string, blockedUserId: string): Promise<ApiResponse> {
+  async unblockUser(userId: string, blockedUserId: string): Promise<ApiResponse> {
     try {
       // Validate user IDs
       if (!ValidationUtils.isValidUUID(userId) || !ValidationUtils.isValidUUID(blockedUserId)) {
@@ -576,7 +577,7 @@ export class UserService {
       }
 
       // Check if user is blocked
-      const isBlocked = await UserRepository.isUserBlocked(userId, blockedUserId);
+      const isBlocked = await this.userRepository.isUserBlocked(userId, blockedUserId);
       if (!isBlocked) {
         return {
           success: false,
@@ -585,7 +586,7 @@ export class UserService {
       }
 
       // Unblock user
-      await UserRepository.unblockUser(userId, blockedUserId);
+      await this.userRepository.unblockUser(userId, blockedUserId);
 
       return {
         success: true,
@@ -604,7 +605,7 @@ export class UserService {
   /**
    * Get blocked users list
    */
-  static async getBlockedUsers(userId: string): Promise<ApiResponse> {
+  async getBlockedUsers(userId: string): Promise<ApiResponse> {
     try {
       // Validate user ID
       if (!ValidationUtils.isValidUUID(userId)) {
@@ -615,7 +616,7 @@ export class UserService {
       }
 
       // Get blocked users
-      const blockedUsers = await UserRepository.getBlockedUsers(userId);
+      const blockedUsers = await this.userRepository.getBlockedUsers(userId);
 
       // Convert to API format (minimal info for blocked users)
       const apiBlockedUsers = blockedUsers.map(user => ({
@@ -646,7 +647,7 @@ export class UserService {
   /**
    * Get mutual contacts between two users
    */
-  static async getMutualContacts(userId: string, otherUserId: string): Promise<ApiResponse> {
+  async getMutualContacts(userId: string, otherUserId: string): Promise<ApiResponse> {
     try {
       // Validate user IDs
       if (!ValidationUtils.isValidUUID(userId) || !ValidationUtils.isValidUUID(otherUserId)) {
@@ -657,7 +658,7 @@ export class UserService {
       }
 
       // Get mutual contacts
-      const mutualContacts = await UserRepository.getMutualContacts(userId, otherUserId);
+      const mutualContacts = await this.userRepository.getMutualContacts(userId, otherUserId);
 
       // Convert to API format
       const apiMutualContacts = mutualContacts.map(contact => 

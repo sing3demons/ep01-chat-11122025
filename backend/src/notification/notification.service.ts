@@ -1,4 +1,4 @@
-import { NotificationRepository } from './notification.repository';
+import { NotificationRepository, INotificationRepository } from './notification.repository';
 import { NotificationModel, CreateNotificationData, UpdateNotificationSettingsData, NotificationQuery } from './notification.model';
 import { NotificationConverter } from './notification.converter';
 import { ApiResponse } from '../types';
@@ -10,10 +10,11 @@ import { WebSocketService } from '../websocket/websocket.service';
  * Handles business logic for notification operations
  */
 export class NotificationService {
+  constructor(private readonly notificationRepository: INotificationRepository) {}
   /**
    * Create a new notification
    */
-  static async createNotification(data: CreateNotificationData): Promise<ApiResponse> {
+  async createNotification(data: CreateNotificationData): Promise<ApiResponse> {
     try {
       // Validate notification data
       const validation = NotificationModel.validateCreateNotification(data);
@@ -25,7 +26,7 @@ export class NotificationService {
       }
 
       // Check if user exists
-      const userExists = await NotificationRepository.verifyUserExists(validation.sanitizedData!.userId);
+      const userExists = await this.notificationRepository.verifyUserExists(validation.sanitizedData!.userId);
       if (!userExists) {
         return {
           success: false,
@@ -34,7 +35,7 @@ export class NotificationService {
       }
 
       // Get user's notification settings
-      const settings = await NotificationRepository.getNotificationSettings(validation.sanitizedData!.userId);
+      const settings = await this.notificationRepository.getNotificationSettings(validation.sanitizedData!.userId);
 
       // Check if notification should be sent based on settings
       if (settings) {
@@ -53,7 +54,7 @@ export class NotificationService {
       }
 
       // Create notification
-      const notification = await NotificationRepository.createNotification(validation.sanitizedData!);
+      const notification = await this.notificationRepository.createNotification(validation.sanitizedData!);
 
       // Convert to API format
       const apiNotification = NotificationConverter.toApiNotification(notification);
@@ -80,7 +81,7 @@ export class NotificationService {
   /**
    * Get user notifications
    */
-  static async getUserNotifications(query: NotificationQuery): Promise<ApiResponse> {
+  async getUserNotifications(query: NotificationQuery): Promise<ApiResponse> {
     try {
       // Validate query
       const validation = NotificationModel.validateNotificationQuery(query);
@@ -92,7 +93,7 @@ export class NotificationService {
       }
 
       // Get notifications
-      const notifications = await NotificationRepository.getUserNotifications(validation.sanitizedData!);
+      const notifications = await this.notificationRepository.getUserNotifications(validation.sanitizedData!);
 
       // Convert to API format
       const apiNotifications = notifications.map(notification => 
@@ -123,7 +124,7 @@ export class NotificationService {
   /**
    * Mark notification as read
    */
-  static async markAsRead(notificationId: string, userId: string): Promise<ApiResponse> {
+  async markAsRead(notificationId: string, userId: string): Promise<ApiResponse> {
     try {
       // Validate notification ID
       if (!ValidationUtils.isValidUUID(notificationId)) {
@@ -134,7 +135,7 @@ export class NotificationService {
       }
 
       // Get notification
-      const notification = await NotificationRepository.getNotificationById(notificationId);
+      const notification = await this.notificationRepository.getNotificationById(notificationId);
 
       if (!notification) {
         return {
@@ -152,7 +153,7 @@ export class NotificationService {
       }
 
       // Mark as read
-      const updatedNotification = await NotificationRepository.updateNotification(notificationId, {
+      const updatedNotification = await this.notificationRepository.updateNotification(notificationId, {
         isRead: true
       });
 
@@ -177,7 +178,7 @@ export class NotificationService {
   /**
    * Mark all notifications as read for user
    */
-  static async markAllAsRead(userId: string): Promise<ApiResponse> {
+  async markAllAsRead(userId: string): Promise<ApiResponse> {
     try {
       // Validate user ID
       if (!ValidationUtils.isValidUUID(userId)) {
@@ -188,7 +189,7 @@ export class NotificationService {
       }
 
       // Mark all unread notifications as read
-      const updatedCount = await NotificationRepository.markAllAsRead(userId);
+      const updatedCount = await this.notificationRepository.markAllAsRead(userId);
 
       return {
         success: true,
@@ -208,7 +209,7 @@ export class NotificationService {
   /**
    * Delete notification
    */
-  static async deleteNotification(notificationId: string, userId: string): Promise<ApiResponse> {
+  async deleteNotification(notificationId: string, userId: string): Promise<ApiResponse> {
     try {
       // Validate notification ID
       if (!ValidationUtils.isValidUUID(notificationId)) {
@@ -219,7 +220,7 @@ export class NotificationService {
       }
 
       // Get notification
-      const notification = await NotificationRepository.getNotificationById(notificationId);
+      const notification = await this.notificationRepository.getNotificationById(notificationId);
 
       if (!notification) {
         return {
@@ -237,7 +238,7 @@ export class NotificationService {
       }
 
       // Delete notification
-      await NotificationRepository.deleteNotification(notificationId);
+      await this.notificationRepository.deleteNotification(notificationId);
 
       return {
         success: true,
@@ -256,7 +257,7 @@ export class NotificationService {
   /**
    * Get notification settings
    */
-  static async getNotificationSettings(userId: string): Promise<ApiResponse> {
+  async getNotificationSettings(userId: string): Promise<ApiResponse> {
     try {
       // Validate user ID
       if (!ValidationUtils.isValidUUID(userId)) {
@@ -267,7 +268,7 @@ export class NotificationService {
       }
 
       // Get notification settings
-      const settings = await NotificationRepository.getNotificationSettings(userId);
+      const settings = await this.notificationRepository.getNotificationSettings(userId);
 
       if (!settings) {
         return {
@@ -296,7 +297,7 @@ export class NotificationService {
   /**
    * Update notification settings
    */
-  static async updateNotificationSettings(
+  async updateNotificationSettings(
     userId: string,
     updateData: UpdateNotificationSettingsData
   ): Promise<ApiResponse> {
@@ -319,7 +320,7 @@ export class NotificationService {
       }
 
       // Update notification settings
-      const updatedSettings = await NotificationRepository.updateNotificationSettings(
+      const updatedSettings = await this.notificationRepository.updateNotificationSettings(
         userId,
         validation.sanitizedData!
       );
@@ -345,7 +346,7 @@ export class NotificationService {
   /**
    * Get unread notification count
    */
-  static async getUnreadCount(userId: string): Promise<ApiResponse> {
+  async getUnreadCount(userId: string): Promise<ApiResponse> {
     try {
       // Validate user ID
       if (!ValidationUtils.isValidUUID(userId)) {
@@ -356,7 +357,7 @@ export class NotificationService {
       }
 
       // Get unread count
-      const unreadCount = await NotificationRepository.getUnreadCount(userId);
+      const unreadCount = await this.notificationRepository.getUnreadCount(userId);
 
       return {
         success: true,
@@ -375,7 +376,7 @@ export class NotificationService {
   /**
    * Get unread notification count by type for badge display
    */
-  static async getUnreadCountByType(userId: string): Promise<ApiResponse> {
+  async getUnreadCountByType(userId: string): Promise<ApiResponse> {
     try {
       // Validate user ID
       if (!ValidationUtils.isValidUUID(userId)) {
@@ -386,13 +387,13 @@ export class NotificationService {
       }
 
       // Get unread count by type
-      const unreadByType = await NotificationRepository.getUnreadCountByType(userId);
+      const unreadByType = await this.notificationRepository.getUnreadCountByType(userId);
 
       // Calculate total unread count
       const totalUnread = unreadByType.reduce((sum, item) => sum + item.count, 0);
 
       // Get high priority unread count
-      const highPriorityNotifications = await NotificationRepository.getHighPriorityUnreadNotifications(userId);
+      const highPriorityNotifications = await this.notificationRepository.getHighPriorityUnreadNotifications(userId);
       const highPriorityCount = highPriorityNotifications.length;
 
       return {
@@ -419,7 +420,7 @@ export class NotificationService {
   /**
    * Get notification badge data for UI
    */
-  static async getNotificationBadgeData(userId: string): Promise<ApiResponse> {
+  async getNotificationBadgeData(userId: string): Promise<ApiResponse> {
     try {
       // Validate user ID
       if (!ValidationUtils.isValidUUID(userId)) {
@@ -431,9 +432,9 @@ export class NotificationService {
 
       // Get comprehensive badge data
       const [unreadByType, highPriorityNotifications, recentNotifications] = await Promise.all([
-        NotificationRepository.getUnreadCountByType(userId),
-        NotificationRepository.getHighPriorityUnreadNotifications(userId),
-        NotificationRepository.getRecentNotifications(userId, 3)
+        this.notificationRepository.getUnreadCountByType(userId),
+        this.notificationRepository.getHighPriorityUnreadNotifications(userId),
+        this.notificationRepository.getRecentNotifications(userId, 3)
       ]);
 
       // Calculate totals
@@ -471,7 +472,7 @@ export class NotificationService {
   /**
    * Send message notification with enhanced mention detection
    */
-  static async sendMessageNotification(
+  async sendMessageNotification(
     recipientId: string,
     senderId: string,
     senderName: string,
@@ -519,7 +520,7 @@ export class NotificationService {
   /**
    * Extract mentions from message content
    */
-  private static extractMentions(content: string): string[] {
+  private extractMentions(content: string): string[] {
     // Match @username patterns (alphanumeric and underscore)
     const mentionRegex = /@([a-zA-Z0-9_]+)/g;
     const mentions: string[] = [];
@@ -535,7 +536,7 @@ export class NotificationService {
   /**
    * Send bulk message notifications for group messages
    */
-  static async sendBulkMessageNotifications(
+  async sendBulkMessageNotifications(
     recipientIds: string[],
     senderId: string,
     senderName: string,
@@ -580,7 +581,7 @@ export class NotificationService {
 
       // Bulk create notifications
       if (notifications.length > 0) {
-        const createdCount = await NotificationRepository.bulkCreateNotifications(notifications);
+        const createdCount = await this.notificationRepository.bulkCreateNotifications(notifications);
 
         // Send real-time notifications via WebSocket
         const wsService = WebSocketService.getInstance();
@@ -618,7 +619,7 @@ export class NotificationService {
   /**
    * Send group invite notification
    */
-  static async sendGroupInviteNotification(
+  async sendGroupInviteNotification(
     recipientId: string,
     inviterName: string,
     groupName: string,
@@ -648,7 +649,7 @@ export class NotificationService {
   /**
    * Send real-time notification update
    */
-  static async sendRealTimeNotificationUpdate(userId: string, updateType: 'created' | 'read' | 'deleted', notificationData?: any): Promise<void> {
+  async sendRealTimeNotificationUpdate(userId: string, updateType: 'created' | 'read' | 'deleted', notificationData?: any): Promise<void> {
     try {
       const wsService = WebSocketService.getInstance();
       
@@ -676,9 +677,9 @@ export class NotificationService {
   /**
    * Handle notification sound preferences
    */
-  static async shouldPlaySound(userId: string, notificationType: string): Promise<boolean> {
+  async shouldPlaySound(userId: string, notificationType: string): Promise<boolean> {
     try {
-      const settings = await NotificationRepository.getNotificationSettings(userId);
+      const settings = await this.notificationRepository.getNotificationSettings(userId);
       
       if (!settings || !settings.soundEnabled) {
         return false;
@@ -704,12 +705,12 @@ export class NotificationService {
   /**
    * Clean up old notifications
    */
-  static async cleanupOldNotifications(daysOld: number = 30): Promise<ApiResponse> {
+  async cleanupOldNotifications(daysOld: number = 30): Promise<ApiResponse> {
     try {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - daysOld);
 
-      const deletedCount = await NotificationRepository.deleteOldNotifications(cutoffDate);
+      const deletedCount = await this.notificationRepository.deleteOldNotifications(cutoffDate);
 
       return {
         success: true,

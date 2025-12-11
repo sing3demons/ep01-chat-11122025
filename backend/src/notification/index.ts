@@ -8,3 +8,6 @@ export * from './notification.controller';
 export * from './notification.service';
 export * from './notification.repository';
 export { default as notificationRoutes } from './notification.routes';
+
+// Export interfaces
+export type { INotificationRepository } from './notification.repository';

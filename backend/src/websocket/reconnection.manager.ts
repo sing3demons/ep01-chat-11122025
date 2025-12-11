@@ -145,7 +145,8 @@ export class ReconnectionManager {
 
       // Update user offline status if no other connections exist
       if (this.wsManager && !this.wsManager.isUserOnline(userId)) {
-        await UserService.updateOnlineStatus(userId, false);
+        // TODO: Implement proper dependency injection for UserService
+        // await UserService.updateOnlineStatus(userId, false);
       }
 
     } catch (error) {

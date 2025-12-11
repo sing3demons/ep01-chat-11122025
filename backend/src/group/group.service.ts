@@ -1,5 +1,5 @@
 import { ChatRoomService } from '../chatroom/chatroom.service';
-import { ChatRoomRepository } from '../chatroom/chatroom.repository';
+import { IChatRoomRepository } from '../chatroom/chatroom.repository';
 import { MessageService } from '../message/message.service';
 import { WebSocketService } from '../websocket/websocket.service';
 import { GroupModel, CreateGroupData, UpdateGroupData, GroupMemberData, UpdateGroupMemberData } from './group.model';
@@ -13,10 +13,15 @@ import { CHAT_ROOM_TYPES, USER_ROLES } from '../config/constants';
  * Handles business logic for group chat operations including creation, management, and broadcasting
  */
 export class GroupService {
+  constructor(
+    private readonly chatRoomService: ChatRoomService,
+    private readonly messageService: MessageService,
+    private readonly chatRoomRepository: IChatRoomRepository
+  ) {}
   /**
    * Create a new group chat
    */
-  static async createGroup(data: CreateGroupData): Promise<ApiResponse> {
+  async createGroup(data: CreateGroupData): Promise<ApiResponse> {
     try {
       // Validate group creation data
       const validation = GroupModel.validateCreateGroup(data);
@@ -28,7 +33,7 @@ export class GroupService {
       }
 
       // Verify all participants exist
-      const participantsExist = await ChatRoomRepository.verifyUsersExist(validation.sanitizedData!.participantIds);
+      const participantsExist = await this.chatRoomRepository.verifyUsersExist(validation.sanitizedData!.participantIds);
       if (!participantsExist) {
         return {
           success: false,
@@ -44,7 +49,7 @@ export class GroupService {
         participantIds: validation.sanitizedData!.participantIds
       };
 
-      const result = await ChatRoomService.createChatRoom(chatRoomData);
+      const result = await this.chatRoomService.createChatRoom(chatRoomData);
       
       if (!result.success) {
         return result;
@@ -83,7 +88,7 @@ export class GroupService {
   /**
    * Add member to group
    */
-  static async addMember(
+  async addMember(
     groupId: string,
     memberData: GroupMemberData,
     userId: string
@@ -107,7 +112,7 @@ export class GroupService {
       }
 
       // Check if user is admin
-      const isAdmin = await ChatRoomRepository.isUserAdmin(groupId, userId);
+      const isAdmin = await this.chatRoomRepository.isUserAdmin(groupId, userId);
       if (!isAdmin) {
         return {
           success: false,
@@ -116,7 +121,7 @@ export class GroupService {
       }
 
       // Get group details
-      const group = await ChatRoomRepository.getChatRoomById(groupId);
+      const group = await this.chatRoomRepository.getChatRoomById(groupId);
       if (!group) {
         return {
           success: false,
@@ -132,7 +137,7 @@ export class GroupService {
       }
 
       // Check if user is already a member
-      const isAlreadyMember = await ChatRoomRepository.isUserParticipant(
+      const isAlreadyMember = await this.chatRoomRepository.isUserParticipant(
         groupId,
         validation.sanitizedData!.userId
       );
@@ -145,7 +150,7 @@ export class GroupService {
       }
 
       // Verify user exists
-      const userExists = await ChatRoomRepository.verifyUsersExist([validation.sanitizedData!.userId]);
+      const userExists = await this.chatRoomRepository.verifyUsersExist([validation.sanitizedData!.userId]);
       if (!userExists) {
         return {
           success: false,
@@ -159,7 +164,7 @@ export class GroupService {
         role: validation.sanitizedData!.role || USER_ROLES.MEMBER
       };
 
-      const result = await ChatRoomService.addParticipant(groupId, participantData, userId);
+      const result = await this.chatRoomService.addParticipant(groupId, participantData, userId);
       
       if (!result.success) {
         return result;
@@ -167,7 +172,7 @@ export class GroupService {
 
       // Send group member addition notifications
       const wsService = WebSocketService.getInstance();
-      const participants = await ChatRoomRepository.getChatRoomParticipants(groupId);
+      const participants = await this.chatRoomRepository.getChatRoomParticipants(groupId);
       
       // Notify all existing members about new member
       for (const participant of participants) {
@@ -208,7 +213,7 @@ export class GroupService {
   /**
    * Remove member from group
    */
-  static async removeMember(
+  async removeMember(
     groupId: string,
     memberUserId: string,
     userId: string
@@ -223,7 +228,7 @@ export class GroupService {
       }
 
       // Get group details
-      const group = await ChatRoomRepository.getChatRoomById(groupId);
+      const group = await this.chatRoomRepository.getChatRoomById(groupId);
       if (!group) {
         return {
           success: false,
@@ -239,7 +244,7 @@ export class GroupService {
       }
 
       // Check permissions: admin can remove anyone, users can remove themselves
-      const isAdmin = await ChatRoomRepository.isUserAdmin(groupId, userId);
+      const isAdmin = await this.chatRoomRepository.isUserAdmin(groupId, userId);
       const isSelfRemoval = userId === memberUserId;
 
       if (!isAdmin && !isSelfRemoval) {
@@ -250,7 +255,7 @@ export class GroupService {
       }
 
       // Use ChatRoomService to remove participant
-      const result = await ChatRoomService.removeParticipant(groupId, memberUserId, userId);
+      const result = await this.chatRoomService.removeParticipant(groupId, memberUserId, userId);
       
       if (!result.success) {
         return result;
@@ -258,7 +263,7 @@ export class GroupService {
 
       // Send group member removal notifications
       const wsService = WebSocketService.getInstance();
-      const participants = await ChatRoomRepository.getChatRoomParticipants(groupId);
+      const participants = await this.chatRoomRepository.getChatRoomParticipants(groupId);
       
       // Notify remaining members about member removal
       for (const participant of participants) {
@@ -301,7 +306,7 @@ export class GroupService {
   /**
    * Update member role (admin/member)
    */
-  static async updateMemberRole(
+  async updateMemberRole(
     groupId: string,
     memberUserId: string,
     updateData: UpdateGroupMemberData,
@@ -326,7 +331,7 @@ export class GroupService {
       }
 
       // Check if user is admin
-      const isAdmin = await ChatRoomRepository.isUserAdmin(groupId, userId);
+      const isAdmin = await this.chatRoomRepository.isUserAdmin(groupId, userId);
       if (!isAdmin) {
         return {
           success: false,
@@ -335,7 +340,7 @@ export class GroupService {
       }
 
       // Get group details
-      const group = await ChatRoomRepository.getChatRoomById(groupId);
+      const group = await this.chatRoomRepository.getChatRoomById(groupId);
       if (!group) {
         return {
           success: false,
@@ -355,7 +360,7 @@ export class GroupService {
         role: validation.sanitizedData!.role
       };
 
-      const result = await ChatRoomService.updateParticipantRole(
+      const result = await this.chatRoomService.updateParticipantRole(
         groupId,
         memberUserId,
         participantUpdateData,
@@ -368,7 +373,7 @@ export class GroupService {
 
       // Send role update notifications
       const wsService = WebSocketService.getInstance();
-      const participants = await ChatRoomRepository.getChatRoomParticipants(groupId);
+      const participants = await this.chatRoomRepository.getChatRoomParticipants(groupId);
       
       // Notify all members about role change
       for (const participant of participants) {
@@ -400,7 +405,7 @@ export class GroupService {
   /**
    * Update group settings (name, etc.)
    */
-  static async updateGroup(
+  async updateGroup(
     groupId: string,
     updateData: UpdateGroupData,
     userId: string
@@ -424,7 +429,7 @@ export class GroupService {
       }
 
       // Check if user is admin
-      const isAdmin = await ChatRoomRepository.isUserAdmin(groupId, userId);
+      const isAdmin = await this.chatRoomRepository.isUserAdmin(groupId, userId);
       if (!isAdmin) {
         return {
           success: false,
@@ -433,7 +438,7 @@ export class GroupService {
       }
 
       // Get group details
-      const group = await ChatRoomRepository.getChatRoomById(groupId);
+      const group = await this.chatRoomRepository.getChatRoomById(groupId);
       if (!group) {
         return {
           success: false,
@@ -453,7 +458,7 @@ export class GroupService {
         name: validation.sanitizedData!.name
       };
 
-      const result = await ChatRoomService.updateChatRoom(groupId, chatRoomUpdateData, userId);
+      const result = await this.chatRoomService.updateChatRoom(groupId, chatRoomUpdateData, userId);
       
       if (!result.success) {
         return result;
@@ -461,7 +466,7 @@ export class GroupService {
 
       // Send group update notifications
       const wsService = WebSocketService.getInstance();
-      const participants = await ChatRoomRepository.getChatRoomParticipants(groupId);
+      const participants = await this.chatRoomRepository.getChatRoomParticipants(groupId);
       
       // Notify all members about group update
       for (const participant of participants) {
@@ -494,7 +499,7 @@ export class GroupService {
   /**
    * Broadcast message to all group members
    */
-  static async broadcastMessage(
+  async broadcastMessage(
     groupId: string,
     messageContent: string,
     senderId: string
@@ -523,7 +528,7 @@ export class GroupService {
       }
 
       // Check if sender is a group member
-      const isParticipant = await ChatRoomRepository.isUserParticipant(groupId, senderId);
+      const isParticipant = await this.chatRoomRepository.isUserParticipant(groupId, senderId);
       if (!isParticipant) {
         return {
           success: false,
@@ -532,7 +537,7 @@ export class GroupService {
       }
 
       // Get group details
-      const group = await ChatRoomRepository.getChatRoomById(groupId);
+      const group = await this.chatRoomRepository.getChatRoomById(groupId);
       if (!group) {
         return {
           success: false,
@@ -554,7 +559,7 @@ export class GroupService {
         chatRoomId: groupId
       };
 
-      const result = await MessageService.sendMessage(messageData);
+      const result = await this.messageService.sendMessage(messageData);
       
       if (!result.success) {
         return result;
@@ -578,7 +583,7 @@ export class GroupService {
   /**
    * Get group details with members
    */
-  static async getGroupDetails(groupId: string, userId: string): Promise<ApiResponse> {
+  async getGroupDetails(groupId: string, userId: string): Promise<ApiResponse> {
     try {
       // Validate group ID
       if (!ValidationUtils.isValidUUID(groupId)) {
@@ -589,7 +594,7 @@ export class GroupService {
       }
 
       // Check if user is a group member
-      const isParticipant = await ChatRoomRepository.isUserParticipant(groupId, userId);
+      const isParticipant = await this.chatRoomRepository.isUserParticipant(groupId, userId);
       if (!isParticipant) {
         return {
           success: false,
@@ -598,7 +603,7 @@ export class GroupService {
       }
 
       // Get group details using ChatRoomService
-      const result = await ChatRoomService.getChatRoomById(groupId, userId);
+      const result = await this.chatRoomService.getChatRoomById(groupId, userId);
       
       if (!result.success) {
         return result;
@@ -629,14 +634,14 @@ export class GroupService {
   /**
    * Get user's groups
    */
-  static async getUserGroups(
+  async getUserGroups(
     userId: string,
     limit: number = 20,
     offset: number = 0
   ): Promise<ApiResponse> {
     try {
       // Get user's chat rooms
-      const result = await ChatRoomService.getUserChatRooms(userId, limit, offset);
+      const result = await this.chatRoomService.getUserChatRooms(userId, limit, offset);
       
       if (!result.success) {
         return result;
@@ -674,14 +679,14 @@ export class GroupService {
   /**
    * Leave group (same as remove member for self)
    */
-  static async leaveGroup(groupId: string, userId: string): Promise<ApiResponse> {
+  async leaveGroup(groupId: string, userId: string): Promise<ApiResponse> {
     return await this.removeMember(groupId, userId, userId);
   }
 
   /**
    * Delete group (only creator or admin can delete)
    */
-  static async deleteGroup(groupId: string, userId: string): Promise<ApiResponse> {
+  async deleteGroup(groupId: string, userId: string): Promise<ApiResponse> {
     try {
       // Validate group ID
       if (!ValidationUtils.isValidUUID(groupId)) {
@@ -692,7 +697,7 @@ export class GroupService {
       }
 
       // Get group details
-      const group = await ChatRoomRepository.getChatRoomById(groupId);
+      const group = await this.chatRoomRepository.getChatRoomById(groupId);
       if (!group) {
         return {
           success: false,
@@ -708,7 +713,7 @@ export class GroupService {
       }
 
       // Check if user is admin or creator
-      const isAdmin = await ChatRoomRepository.isUserAdmin(groupId, userId);
+      const isAdmin = await this.chatRoomRepository.isUserAdmin(groupId, userId);
       const isCreator = group.createdBy === userId;
 
       if (!isAdmin && !isCreator) {
@@ -719,7 +724,7 @@ export class GroupService {
       }
 
       // Get participants before deletion for notifications
-      const participants = await ChatRoomRepository.getChatRoomParticipants(groupId);
+      const participants = await this.chatRoomRepository.getChatRoomParticipants(groupId);
 
       // Send group deletion notifications
       const wsService = WebSocketService.getInstance();
@@ -735,7 +740,7 @@ export class GroupService {
       }
 
       // Use ChatRoomService to delete group
-      const result = await ChatRoomService.deleteChatRoom(groupId, userId);
+      const result = await this.chatRoomService.deleteChatRoom(groupId, userId);
       
       return result;
 
@@ -751,7 +756,7 @@ export class GroupService {
   /**
    * Get group statistics
    */
-  static async getGroupStatistics(groupId: string, userId: string): Promise<ApiResponse> {
+  async getGroupStatistics(groupId: string, userId: string): Promise<ApiResponse> {
     try {
       // Validate group ID
       if (!ValidationUtils.isValidUUID(groupId)) {
@@ -762,7 +767,7 @@ export class GroupService {
       }
 
       // Check if user is a group member
-      const isParticipant = await ChatRoomRepository.isUserParticipant(groupId, userId);
+      const isParticipant = await this.chatRoomRepository.isUserParticipant(groupId, userId);
       if (!isParticipant) {
         return {
           success: false,
@@ -771,7 +776,7 @@ export class GroupService {
       }
 
       // Get group details
-      const group = await ChatRoomRepository.getChatRoomById(groupId);
+      const group = await this.chatRoomRepository.getChatRoomById(groupId);
       if (!group) {
         return {
           success: false,
@@ -787,7 +792,7 @@ export class GroupService {
       }
 
       // Get statistics
-      const stats = await ChatRoomRepository.getChatRoomStatistics(groupId);
+      const stats = await this.chatRoomRepository.getChatRoomStatistics(groupId);
 
       return {
         success: true,

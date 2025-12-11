@@ -7,10 +7,11 @@ import { ValidationUtils } from '../utils/validation';
  * Handles HTTP requests for group operations
  */
 export class GroupController {
+  constructor(private readonly groupService: GroupService) { }
   /**
    * Create a new group
    */
-  static async createGroup(req: Request, res: Response): Promise<void> {
+  createGroup = async (req: Request, res: Response): Promise<void> => {
     try {
       const { name, participantIds } = req.body;
       const createdBy = req.user?.id;
@@ -29,7 +30,7 @@ export class GroupController {
         participantIds: participantIds || []
       };
 
-      const result = await GroupService.createGroup(groupData);
+      const result = await this.groupService.createGroup(groupData);
 
       if (result.success) {
         res.status(201).json(result);
@@ -48,7 +49,7 @@ export class GroupController {
   /**
    * Add member to group
    */
-  static async addMember(req: Request, res: Response): Promise<void> {
+  addMember = async (req: Request, res: Response): Promise<void> => {
     try {
       const { groupId } = req.params;
       const { userId, role } = req.body;
@@ -67,7 +68,7 @@ export class GroupController {
         role
       };
 
-      const result = await GroupService.addMember(groupId, memberData, currentUserId);
+      const result = await this.groupService.addMember(groupId, memberData, currentUserId);
 
       if (result.success) {
         res.status(200).json(result);
@@ -86,7 +87,7 @@ export class GroupController {
   /**
    * Remove member from group
    */
-  static async removeMember(req: Request, res: Response): Promise<void> {
+  removeMember = async (req: Request, res: Response): Promise<void> => {
     try {
       const { groupId, userId } = req.params;
       const currentUserId = req.user?.id;
@@ -99,7 +100,7 @@ export class GroupController {
         return;
       }
 
-      const result = await GroupService.removeMember(groupId, userId, currentUserId);
+      const result = await this.groupService.removeMember(groupId, userId, currentUserId);
 
       if (result.success) {
         res.status(200).json(result);
@@ -118,7 +119,7 @@ export class GroupController {
   /**
    * Update member role
    */
-  static async updateMemberRole(req: Request, res: Response): Promise<void> {
+  updateMemberRole = async (req: Request, res: Response): Promise<void> => {
     try {
       const { groupId, userId } = req.params;
       const { role } = req.body;
@@ -134,7 +135,7 @@ export class GroupController {
 
       const updateData = { role };
 
-      const result = await GroupService.updateMemberRole(groupId, userId, updateData, currentUserId);
+      const result = await this.groupService.updateMemberRole(groupId, userId, updateData, currentUserId);
 
       if (result.success) {
         res.status(200).json(result);
@@ -153,7 +154,7 @@ export class GroupController {
   /**
    * Update group settings
    */
-  static async updateGroup(req: Request, res: Response): Promise<void> {
+  updateGroup = async (req: Request, res: Response): Promise<void> => {
     try {
       const { groupId } = req.params;
       const { name } = req.body;
@@ -169,7 +170,7 @@ export class GroupController {
 
       const updateData = { name };
 
-      const result = await GroupService.updateGroup(groupId, updateData, currentUserId);
+      const result = await this.groupService.updateGroup(groupId, updateData, currentUserId);
 
       if (result.success) {
         res.status(200).json(result);
@@ -188,7 +189,7 @@ export class GroupController {
   /**
    * Send message to group
    */
-  static async sendMessage(req: Request, res: Response): Promise<void> {
+  sendMessage = async (req: Request, res: Response): Promise<void> => {
     try {
       const { groupId } = req.params;
       const { content } = req.body;
@@ -202,7 +203,7 @@ export class GroupController {
         return;
       }
 
-      const result = await GroupService.broadcastMessage(groupId, content, senderId);
+      const result = await this.groupService.broadcastMessage(groupId, content, senderId);
 
       if (result.success) {
         res.status(201).json(result);
@@ -221,7 +222,7 @@ export class GroupController {
   /**
    * Get group details
    */
-  static async getGroupDetails(req: Request, res: Response): Promise<void> {
+  getGroupDetails = async (req: Request, res: Response): Promise<void> => {
     try {
       const { groupId } = req.params;
       const userId = req.user?.id;
@@ -234,7 +235,7 @@ export class GroupController {
         return;
       }
 
-      const result = await GroupService.getGroupDetails(groupId, userId);
+      const result = await this.groupService.getGroupDetails(groupId, userId);
 
       if (result.success) {
         res.status(200).json(result);
@@ -253,7 +254,7 @@ export class GroupController {
   /**
    * Get user's groups
    */
-  static async getUserGroups(req: Request, res: Response): Promise<void> {
+  getUserGroups = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user?.id;
       const limit = parseInt(req.query.limit as string) || 20;
@@ -267,7 +268,7 @@ export class GroupController {
         return;
       }
 
-      const result = await GroupService.getUserGroups(userId, limit, offset);
+      const result = await this.groupService.getUserGroups(userId, limit, offset);
 
       if (result.success) {
         res.status(200).json(result);
@@ -286,7 +287,7 @@ export class GroupController {
   /**
    * Leave group
    */
-  static async leaveGroup(req: Request, res: Response): Promise<void> {
+  leaveGroup = async (req: Request, res: Response): Promise<void> => {
     try {
       const { groupId } = req.params;
       const userId = req.user?.id;
@@ -299,7 +300,7 @@ export class GroupController {
         return;
       }
 
-      const result = await GroupService.leaveGroup(groupId, userId);
+      const result = await this.groupService.leaveGroup(groupId, userId);
 
       if (result.success) {
         res.status(200).json(result);
@@ -318,7 +319,7 @@ export class GroupController {
   /**
    * Delete group
    */
-  static async deleteGroup(req: Request, res: Response): Promise<void> {
+  deleteGroup = async (req: Request, res: Response): Promise<void> => {
     try {
       const { groupId } = req.params;
       const userId = req.user?.id;
@@ -331,7 +332,7 @@ export class GroupController {
         return;
       }
 
-      const result = await GroupService.deleteGroup(groupId, userId);
+      const result = await this.groupService.deleteGroup(groupId, userId);
 
       if (result.success) {
         res.status(200).json(result);
@@ -350,7 +351,7 @@ export class GroupController {
   /**
    * Get group statistics
    */
-  static async getGroupStatistics(req: Request, res: Response): Promise<void> {
+  getGroupStatistics = async (req: Request, res: Response): Promise<void> => {
     try {
       const { groupId } = req.params;
       const userId = req.user?.id;
@@ -363,7 +364,7 @@ export class GroupController {
         return;
       }
 
-      const result = await GroupService.getGroupStatistics(groupId, userId);
+      const result = await this.groupService.getGroupStatistics(groupId, userId);
 
       if (result.success) {
         res.status(200).json(result);

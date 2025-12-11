@@ -1,10 +1,11 @@
-import { MessageRepository } from './message.repository';
+import { MessageRepository, IMessageRepository } from './message.repository';
 import { MessageModel, CreateMessageData, UpdateMessageData, MessageSearchQuery } from './message.model';
 import { MessageConverter } from './message.converter';
 import { ApiResponse } from '../types';
 import { ValidationUtils } from '../utils/validation';
 import { WebSocketService } from '../websocket/websocket.service';
 import { NotificationService } from '../notification/notification.service';
+import { NotificationRepository } from '../notification/notification.repository';
 import { MESSAGE_STATUS } from '../config/constants';
 
 /**
@@ -12,10 +13,14 @@ import { MESSAGE_STATUS } from '../config/constants';
  * Handles business logic for message operations with real-time WebSocket integration
  */
 export class MessageService {
+  constructor(
+    private readonly messageRepository: IMessageRepository,
+    private readonly notificationService?: NotificationService
+  ) {}
   /**
    * Send a new message with real-time broadcasting
    */
-  static async sendMessage(data: CreateMessageData): Promise<ApiResponse> {
+  async sendMessage(data: CreateMessageData): Promise<ApiResponse> {
     try {
       // Validate message data
       const validation = MessageModel.validateCreateMessage(data);
@@ -27,7 +32,7 @@ export class MessageService {
       }
 
       // Check if user is participant in the chat room
-      const isParticipant = await MessageRepository.isUserParticipantInChatRoom(
+      const isParticipant = await this.messageRepository.isUserParticipantInChatRoom(
         data.senderId,
         data.chatRoomId
       );
@@ -40,16 +45,16 @@ export class MessageService {
       }
 
       // Check if sender is blocked by any participants (for direct chats)
-      const chatRoomInfo = await MessageRepository.getChatRoomById(data.chatRoomId);
+      const chatRoomInfo = await this.messageRepository.getChatRoomById(data.chatRoomId);
       if (chatRoomInfo?.type === 'direct') {
-        const participants = await MessageRepository.getChatRoomParticipants(data.chatRoomId);
+        const participants = await this.messageRepository.getChatRoomParticipants(data.chatRoomId);
         const otherParticipant = participants.find(p => p.userId !== data.senderId);
         
         if (otherParticipant) {
           // Check if sender is blocked by the other participant
-          const isBlocked = await MessageRepository.isUserBlocked(otherParticipant.userId, data.senderId);
+          const isBlocked = await this.messageRepository.isUserBlocked(otherParticipant.userId, data.senderId);
           // Check if sender has blocked the other participant
-          const hasBlocked = await MessageRepository.isUserBlocked(data.senderId, otherParticipant.userId);
+          const hasBlocked = await this.messageRepository.isUserBlocked(data.senderId, otherParticipant.userId);
           
           if (isBlocked || hasBlocked) {
             return {
@@ -61,23 +66,23 @@ export class MessageService {
       }
 
       // Create message
-      const message = await MessageRepository.createMessage(validation.sanitizedData!);
+      const message = await this.messageRepository.createMessage(validation.sanitizedData!);
 
       // Update chat room's last message timestamp
-      await MessageRepository.updateChatRoomLastMessage(data.chatRoomId, message.id);
+      await this.messageRepository.updateChatRoomLastMessage(data.chatRoomId, message.id);
 
       // Get message with sender info for broadcasting
-      const messageWithSender = await MessageRepository.getMessageByIdWithSender(message.id);
+      const messageWithSender = await this.messageRepository.getMessageByIdWithSender(message.id);
 
       // Convert to API format
       const apiMessage = MessageConverter.toApiMessageWithSender(messageWithSender);
 
       // Get chat room participants for real-time broadcasting
-      const chatParticipants = await MessageRepository.getChatRoomParticipants(data.chatRoomId);
+      const chatParticipants = await this.messageRepository.getChatRoomParticipants(data.chatRoomId);
       
       // Get chat room info for notifications
       const chatRoom = chatRoomInfo;
-      const senderInfo = await MessageRepository.getUserById(data.senderId);
+      const senderInfo = await this.messageRepository.getUserById(data.senderId);
       
       // Prepare recipient data for bulk notifications
       const recipientIds: string[] = [];
@@ -93,7 +98,7 @@ export class MessageService {
           recipientIds.push(participant.userId);
           
           // Get participant username for mention detection
-          const participantUser = await MessageRepository.getUserById(participant.userId);
+          const participantUser = await this.messageRepository.getUserById(participant.userId);
           if (participantUser) {
             recipientUsernames[participant.userId] = participantUser.username;
           }
@@ -121,8 +126,8 @@ export class MessageService {
       }
 
       // Send bulk notifications for the message
-      if (recipientIds.length > 0 && senderInfo) {
-        await NotificationService.sendBulkMessageNotifications(
+      if (recipientIds.length > 0 && senderInfo && this.notificationService) {
+        await this.notificationService.sendBulkMessageNotifications(
           recipientIds,
           data.senderId,
           senderInfo.username,
@@ -151,7 +156,7 @@ export class MessageService {
   /**
    * Get messages for a chat room
    */
-  static async getMessagesByChatRoom(
+  async getMessagesByChatRoom(
     chatRoomId: string,
     userId: string,
     limit: number = 50,
@@ -183,7 +188,7 @@ export class MessageService {
       }
 
       // Check if user is participant in the chat room
-      const isParticipant = await MessageRepository.isUserParticipantInChatRoom(userId, chatRoomId);
+      const isParticipant = await this.messageRepository.isUserParticipantInChatRoom(userId, chatRoomId);
 
       if (!isParticipant) {
         return {
@@ -193,7 +198,7 @@ export class MessageService {
       }
 
       // Get messages
-      const messages = await MessageRepository.getMessagesByChatRoom(
+      const messages = await this.messageRepository.getMessagesByChatRoom(
         chatRoomId,
         limit,
         offset,
@@ -227,7 +232,7 @@ export class MessageService {
   /**
    * Get message by ID
    */
-  static async getMessageById(messageId: string, userId: string): Promise<ApiResponse> {
+  async getMessageById(messageId: string, userId: string): Promise<ApiResponse> {
     try {
       // Validate message ID
       if (!ValidationUtils.isValidUUID(messageId)) {
@@ -238,7 +243,7 @@ export class MessageService {
       }
 
       // Get message with sender
-      const message = await MessageRepository.getMessageByIdWithSender(messageId);
+      const message = await this.messageRepository.getMessageByIdWithSender(messageId);
 
       if (!message) {
         return {
@@ -248,7 +253,7 @@ export class MessageService {
       }
 
       // Check if user is participant in the chat room
-      const isParticipant = await MessageRepository.isUserParticipantInChatRoom(
+      const isParticipant = await this.messageRepository.isUserParticipantInChatRoom(
         userId,
         message.chatRoomId
       );
@@ -280,7 +285,7 @@ export class MessageService {
   /**
    * Update message
    */
-  static async updateMessage(
+  async updateMessage(
     messageId: string,
     updateData: UpdateMessageData,
     userId: string
@@ -304,7 +309,7 @@ export class MessageService {
       }
 
       // Get existing message
-      const existingMessage = await MessageRepository.getMessageById(messageId);
+      const existingMessage = await this.messageRepository.getMessageById(messageId);
 
       if (!existingMessage) {
         return {
@@ -322,7 +327,7 @@ export class MessageService {
       }
 
       // Check if user is participant (for status updates)
-      const isParticipant = await MessageRepository.isUserParticipantInChatRoom(
+      const isParticipant = await this.messageRepository.isUserParticipantInChatRoom(
         userId,
         existingMessage.chatRoomId
       );
@@ -350,7 +355,7 @@ export class MessageService {
       }
 
       // Update message
-      const updatedMessage = await MessageRepository.updateMessage(messageId, validation.sanitizedData!);
+      const updatedMessage = await this.messageRepository.updateMessage(messageId, validation.sanitizedData!);
 
       // Convert to API format
       const apiMessage = MessageConverter.toApiMessage(updatedMessage);
@@ -373,7 +378,7 @@ export class MessageService {
   /**
    * Delete message
    */
-  static async deleteMessage(messageId: string, userId: string): Promise<ApiResponse> {
+  async deleteMessage(messageId: string, userId: string): Promise<ApiResponse> {
     try {
       // Validate message ID
       if (!ValidationUtils.isValidUUID(messageId)) {
@@ -384,7 +389,7 @@ export class MessageService {
       }
 
       // Get existing message
-      const existingMessage = await MessageRepository.getMessageById(messageId);
+      const existingMessage = await this.messageRepository.getMessageById(messageId);
 
       if (!existingMessage) {
         return {
@@ -394,7 +399,7 @@ export class MessageService {
       }
 
       // Check if user is the sender or admin
-      const isParticipant = await MessageRepository.isUserParticipantInChatRoom(
+      const isParticipant = await this.messageRepository.isUserParticipantInChatRoom(
         userId,
         existingMessage.chatRoomId
       );
@@ -408,7 +413,7 @@ export class MessageService {
 
       // Only sender or chat room admin can delete messages
       const canDelete = existingMessage.senderId === userId || 
-        await MessageRepository.isUserAdminInChatRoom(userId, existingMessage.chatRoomId);
+        await this.messageRepository.isUserAdminInChatRoom(userId, existingMessage.chatRoomId);
 
       if (!canDelete) {
         return {
@@ -418,7 +423,7 @@ export class MessageService {
       }
 
       // Delete message
-      await MessageRepository.deleteMessage(messageId);
+      await this.messageRepository.deleteMessage(messageId);
 
       return {
         success: true,
@@ -437,7 +442,7 @@ export class MessageService {
   /**
    * Mark message as read
    */
-  static async markAsRead(messageId: string, userId: string): Promise<ApiResponse> {
+  async markAsRead(messageId: string, userId: string): Promise<ApiResponse> {
     try {
       // Validate message ID
       if (!ValidationUtils.isValidUUID(messageId)) {
@@ -448,7 +453,7 @@ export class MessageService {
       }
 
       // Get existing message
-      const existingMessage = await MessageRepository.getMessageById(messageId);
+      const existingMessage = await this.messageRepository.getMessageById(messageId);
 
       if (!existingMessage) {
         return {
@@ -458,7 +463,7 @@ export class MessageService {
       }
 
       // Check if user is participant
-      const isParticipant = await MessageRepository.isUserParticipantInChatRoom(
+      const isParticipant = await this.messageRepository.isUserParticipantInChatRoom(
         userId,
         existingMessage.chatRoomId
       );
@@ -479,7 +484,7 @@ export class MessageService {
       }
 
       // Update message status to read
-      const updatedMessage = await MessageRepository.updateMessage(messageId, {
+      const updatedMessage = await this.messageRepository.updateMessage(messageId, {
         status: 'read'
       });
 
@@ -504,7 +509,7 @@ export class MessageService {
   /**
    * Search messages
    */
-  static async searchMessages(query: MessageSearchQuery, userId: string): Promise<ApiResponse> {
+  async searchMessages(query: MessageSearchQuery, userId: string): Promise<ApiResponse> {
     try {
       // Validate search query
       const validation = MessageModel.validateSearchQuery(query);
@@ -517,7 +522,7 @@ export class MessageService {
 
       // If searching in specific chat room, check if user is participant
       if (validation.sanitizedData?.chatRoomId) {
-        const isParticipant = await MessageRepository.isUserParticipantInChatRoom(
+        const isParticipant = await this.messageRepository.isUserParticipantInChatRoom(
           userId,
           validation.sanitizedData.chatRoomId
         );
@@ -531,7 +536,7 @@ export class MessageService {
       }
 
       // Search messages
-      const messages = await MessageRepository.searchMessages(validation.sanitizedData!, userId);
+      const messages = await this.messageRepository.searchMessages(validation.sanitizedData!, userId);
 
       // Convert to API format
       const apiMessages = messages.map(message => MessageConverter.toApiMessageWithSender(message));
@@ -560,7 +565,7 @@ export class MessageService {
   /**
    * Update message status (delivered/read) with real-time notification
    */
-  static async updateMessageStatus(
+  async updateMessageStatus(
     messageId: string, 
     status: 'delivered' | 'read', 
     userId: string
@@ -575,7 +580,7 @@ export class MessageService {
       }
 
       // Get existing message
-      const existingMessage = await MessageRepository.getMessageById(messageId);
+      const existingMessage = await this.messageRepository.getMessageById(messageId);
 
       if (!existingMessage) {
         return {
@@ -585,7 +590,7 @@ export class MessageService {
       }
 
       // Check if user is participant
-      const isParticipant = await MessageRepository.isUserParticipantInChatRoom(
+      const isParticipant = await this.messageRepository.isUserParticipantInChatRoom(
         userId,
         existingMessage.chatRoomId
       );
@@ -619,7 +624,7 @@ export class MessageService {
       }
 
       // Update message status
-      const updatedMessage = await MessageRepository.updateMessage(messageId, { status });
+      const updatedMessage = await this.messageRepository.updateMessage(messageId, { status });
 
       // Send real-time status update to message sender
       const wsService = WebSocketService.getInstance();
@@ -643,7 +648,7 @@ export class MessageService {
   /**
    * Handle typing indicator with real-time broadcasting
    */
-  static async handleTypingIndicator(
+  async handleTypingIndicator(
     userId: string,
     chatRoomId: string,
     isTyping: boolean
@@ -665,7 +670,7 @@ export class MessageService {
       }
 
       // Check if user is participant in the chat room
-      const isParticipant = await MessageRepository.isUserParticipantInChatRoom(userId, chatRoomId);
+      const isParticipant = await this.messageRepository.isUserParticipantInChatRoom(userId, chatRoomId);
 
       if (!isParticipant) {
         return {
@@ -675,7 +680,7 @@ export class MessageService {
       }
 
       // Get chat room participants
-      const participants = await MessageRepository.getChatRoomParticipants(chatRoomId);
+      const participants = await this.messageRepository.getChatRoomParticipants(chatRoomId);
       
       // Broadcast typing indicator to all participants except the typer
       const wsService = WebSocketService.getInstance();
@@ -702,7 +707,7 @@ export class MessageService {
   /**
    * Mark messages as delivered for a user when they come online
    */
-  static async markMessagesAsDelivered(userId: string, chatRoomId?: string): Promise<ApiResponse> {
+  async markMessagesAsDelivered(userId: string, chatRoomId?: string): Promise<ApiResponse> {
     try {
       // Validate user ID
       if (!ValidationUtils.isValidUUID(userId)) {
@@ -713,7 +718,7 @@ export class MessageService {
       }
 
       // Get undelivered messages for the user
-      const undeliveredMessages = await MessageRepository.getUndeliveredMessagesForUser(
+      const undeliveredMessages = await this.messageRepository.getUndeliveredMessagesForUser(
         userId,
         chatRoomId
       );
@@ -727,7 +732,7 @@ export class MessageService {
         if (message.senderId === userId) continue;
 
         // Update status
-        await MessageRepository.updateMessage(message.id, { 
+        await this.messageRepository.updateMessage(message.id, { 
           status: MESSAGE_STATUS.DELIVERED 
         });
 
@@ -759,7 +764,7 @@ export class MessageService {
   /**
    * Get unread message count for a user
    */
-  static async getUnreadMessageCount(userId: string, chatRoomId?: string): Promise<ApiResponse> {
+  async getUnreadMessageCount(userId: string, chatRoomId?: string): Promise<ApiResponse> {
     try {
       // Validate user ID
       if (!ValidationUtils.isValidUUID(userId)) {
@@ -778,7 +783,7 @@ export class MessageService {
       }
 
       // Get unread count
-      const unreadCount = await MessageRepository.getUnreadMessageCount(userId, chatRoomId);
+      const unreadCount = await this.messageRepository.getUnreadMessageCount(userId, chatRoomId);
 
       return {
         success: true,
@@ -797,7 +802,7 @@ export class MessageService {
   /**
    * Get recent messages for chat list preview
    */
-  static async getRecentMessagesForChatList(userId: string): Promise<ApiResponse> {
+  async getRecentMessagesForChatList(userId: string): Promise<ApiResponse> {
     try {
       // Validate user ID
       if (!ValidationUtils.isValidUUID(userId)) {
@@ -808,7 +813,7 @@ export class MessageService {
       }
 
       // Get user's chat rooms with recent messages
-      const chatRoomsWithMessages = await MessageRepository.getChatRoomsWithRecentMessages(userId);
+      const chatRoomsWithMessages = await this.messageRepository.getChatRoomsWithRecentMessages(userId);
 
       // Convert to API format
       const chatList = chatRoomsWithMessages.map(chatRoom => ({

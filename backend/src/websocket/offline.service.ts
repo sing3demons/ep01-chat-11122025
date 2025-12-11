@@ -1,7 +1,7 @@
 import { WebSocketService } from './websocket.service';
 import { MessageService } from '../message/message.service';
 import { UserService } from '../user/user.service';
-import { OfflineRepository } from './offline.repository';
+import { OfflineRepository, IOfflineRepository } from './offline.repository';
 import { ApiResponse } from '../types';
 import { ValidationUtils } from '../utils/validation';
 
@@ -39,7 +39,11 @@ export class OfflineService {
   private readonly MAX_RETRIES = 5;
   private readonly RETRY_BACKOFF_MULTIPLIER = 2;
 
-  private constructor() {
+  private constructor(
+    private readonly offlineRepository: IOfflineRepository,
+    private readonly messageService: MessageService,
+    private readonly userService: UserService
+  ) {
     this.loadFromDatabase();
     this.startRetryProcessor();
     this.startSyncProcessor();
@@ -48,9 +52,16 @@ export class OfflineService {
   /**
    * Get singleton instance
    */
-  public static getInstance(): OfflineService {
+  public static getInstance(
+    offlineRepository?: IOfflineRepository,
+    messageService?: MessageService,
+    userService?: UserService
+  ): OfflineService {
     if (!OfflineService.instance) {
-      OfflineService.instance = new OfflineService();
+      if (!offlineRepository || !messageService || !userService) {
+        throw new Error('Dependencies required for first initialization');
+      }
+      OfflineService.instance = new OfflineService(offlineRepository, messageService, userService);
     }
     return OfflineService.instance;
   }
@@ -76,7 +87,7 @@ export class OfflineService {
       }
 
       // Store in database
-      const queuedMessage = await OfflineRepository.createQueuedMessage({
+      const queuedMessage = await this.offlineRepository.createQueuedMessage({
         userId,
         messageData: JSON.stringify(messageData),
         retryCount: 0,
@@ -149,7 +160,7 @@ export class OfflineService {
         
         try {
           // Send the queued message
-          const result = await MessageService.sendMessage(queuedMessage.messageData);
+          const result = await this.messageService.sendMessage(queuedMessage.messageData);
           
           if (result.success) {
             // Send real-time notification to user
@@ -237,7 +248,7 @@ export class OfflineService {
       }
 
       // Store in database
-      const deviceSession = await OfflineRepository.upsertDeviceSession({
+      const deviceSession = await this.offlineRepository.upsertDeviceSession({
         userId,
         deviceId,
         connectionId,
@@ -354,8 +365,8 @@ export class OfflineService {
       let syncedDevices = 0;
 
       // Get user's recent data for synchronization
-      const recentMessages = await MessageService.getRecentMessagesForChatList(userId);
-      const unreadCounts = await MessageService.getUnreadMessageCount(userId);
+      const recentMessages = await this.messageService.getRecentMessagesForChatList(userId);
+      const unreadCounts = await this.messageService.getUnreadMessageCount(userId);
 
       const syncData = {
         type: 'device_sync',
@@ -414,13 +425,13 @@ export class OfflineService {
       console.log(`Handling reconnection for user ${userId}, device ${deviceId || 'unknown'}`);
 
       // Update user online status
-      await UserService.updateOnlineStatus(userId, true);
+      await this.userService.updateOnlineStatus(userId, true);
 
       // Process any queued messages
       const queueResult = await this.processQueuedMessages(userId);
 
       // Mark messages as delivered
-      await MessageService.markMessagesAsDelivered(userId);
+      await this.messageService.markMessagesAsDelivered(userId);
 
       // Synchronize devices if device ID provided
       let syncResult = null;
@@ -493,7 +504,7 @@ export class OfflineService {
       }
 
       // Attempt to send the message
-      const result = await MessageService.sendMessage(foundMessage.messageData);
+      const result = await this.messageService.sendMessage(foundMessage.messageData);
 
       if (result.success) {
         // Remove from queue
@@ -621,7 +632,7 @@ export class OfflineService {
         
         if (message.nextRetryAt <= now) {
           try {
-            const result = await MessageService.sendMessage(message.messageData);
+            const result = await this.messageService.sendMessage(message.messageData);
             
             if (result.success) {
               // Remove from queue and notify user
@@ -699,7 +710,7 @@ export class OfflineService {
   private async loadFromDatabase(): Promise<void> {
     try {
       // Load queued messages
-      const queuedMessages = await OfflineRepository.getQueuedMessagesForRetry();
+      const queuedMessages = await this.offlineRepository.getQueuedMessagesForRetry();
       for (const dbMessage of queuedMessages) {
         const memoryMessage: QueuedMessage = {
           id: dbMessage.id,
@@ -718,7 +729,7 @@ export class OfflineService {
       }
 
       // Load active device sessions
-      const allSessions = await OfflineRepository.getOfflineStats();
+      const allSessions = await this.offlineRepository.getOfflineStats();
       console.log(`Loaded ${queuedMessages.length} queued messages and ${allSessions.activeDeviceSessions} active device sessions from database`);
 
     } catch (error) {

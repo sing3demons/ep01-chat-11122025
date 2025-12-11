@@ -1,4 +1,4 @@
-import { ChatRoomRepository } from './chatroom.repository';
+import { ChatRoomRepository, IChatRoomRepository } from './chatroom.repository';
 import { ChatRoomModel, CreateChatRoomData, UpdateChatRoomData, AddParticipantData, UpdateParticipantData } from './chatroom.model';
 import { ChatRoomConverter } from './chatroom.converter';
 import { ApiResponse } from '../types';
@@ -10,10 +10,11 @@ import { CHAT_ROOM_TYPES, USER_ROLES } from '../config/constants';
  * Handles business logic for chat room operations
  */
 export class ChatRoomService {
+  constructor(private readonly chatRoomRepository: IChatRoomRepository) {}
   /**
    * Create a new chat room
    */
-  static async createChatRoom(data: CreateChatRoomData): Promise<ApiResponse> {
+  async createChatRoom(data: CreateChatRoomData): Promise<ApiResponse> {
     try {
       // Validate chat room data
       const validation = ChatRoomModel.validateCreateChatRoom(data);
@@ -26,14 +27,14 @@ export class ChatRoomService {
 
       // For direct chats, check if one already exists between these users
       if (validation.sanitizedData!.type === CHAT_ROOM_TYPES.DIRECT) {
-        const existingDirectChat = await ChatRoomRepository.findDirectChatBetweenUsers(
+        const existingDirectChat = await this.chatRoomRepository.findDirectChatBetweenUsers(
           validation.sanitizedData!.participantIds[0],
           validation.sanitizedData!.participantIds[1]
         );
 
         if (existingDirectChat) {
           // Return existing chat room
-          const chatRoomWithDetails = await ChatRoomRepository.getChatRoomByIdWithDetails(existingDirectChat.id);
+          const chatRoomWithDetails = await this.chatRoomRepository.getChatRoomByIdWithDetails(existingDirectChat.id);
           const apiChatRoom = ChatRoomConverter.toApiChatRoomWithDetails(chatRoomWithDetails!);
 
           return {
@@ -45,7 +46,7 @@ export class ChatRoomService {
       }
 
       // Verify all participants exist
-      const participantsExist = await ChatRoomRepository.verifyUsersExist(validation.sanitizedData!.participantIds);
+      const participantsExist = await this.chatRoomRepository.verifyUsersExist(validation.sanitizedData!.participantIds);
       if (!participantsExist) {
         return {
           success: false,
@@ -54,10 +55,10 @@ export class ChatRoomService {
       }
 
       // Create chat room
-      const chatRoom = await ChatRoomRepository.createChatRoom(validation.sanitizedData!);
+      const chatRoom = await this.chatRoomRepository.createChatRoom(validation.sanitizedData!);
 
       // Get chat room with details
-      const chatRoomWithDetails = await ChatRoomRepository.getChatRoomByIdWithDetails(chatRoom.id);
+      const chatRoomWithDetails = await this.chatRoomRepository.getChatRoomByIdWithDetails(chatRoom.id);
 
       // Convert to API format
       const apiChatRoom = ChatRoomConverter.toApiChatRoomWithDetails(chatRoomWithDetails!);
@@ -80,7 +81,7 @@ export class ChatRoomService {
   /**
    * Get chat room by ID
    */
-  static async getChatRoomById(chatRoomId: string, userId: string): Promise<ApiResponse> {
+  async getChatRoomById(chatRoomId: string, userId: string): Promise<ApiResponse> {
     try {
       // Validate chat room ID
       if (!ValidationUtils.isValidUUID(chatRoomId)) {
@@ -91,7 +92,7 @@ export class ChatRoomService {
       }
 
       // Check if user is participant
-      const isParticipant = await ChatRoomRepository.isUserParticipant(chatRoomId, userId);
+      const isParticipant = await this.chatRoomRepository.isUserParticipant(chatRoomId, userId);
       if (!isParticipant) {
         return {
           success: false,
@@ -100,7 +101,7 @@ export class ChatRoomService {
       }
 
       // Get chat room with details
-      const chatRoom = await ChatRoomRepository.getChatRoomByIdWithDetails(chatRoomId);
+      const chatRoom = await this.chatRoomRepository.getChatRoomByIdWithDetails(chatRoomId);
 
       if (!chatRoom) {
         return {
@@ -129,7 +130,7 @@ export class ChatRoomService {
   /**
    * Get user's chat rooms
    */
-  static async getUserChatRooms(
+  async getUserChatRooms(
     userId: string,
     limit: number = 20,
     offset: number = 0
@@ -151,7 +152,7 @@ export class ChatRoomService {
       }
 
       // Get user's chat rooms
-      const chatRooms = await ChatRoomRepository.getUserChatRooms(userId, limit, offset);
+      const chatRooms = await this.chatRoomRepository.getUserChatRooms(userId, limit, offset);
 
       // Convert to API format
       const apiChatRooms = chatRooms.map(chatRoom => 
@@ -182,7 +183,7 @@ export class ChatRoomService {
   /**
    * Update chat room
    */
-  static async updateChatRoom(
+  async updateChatRoom(
     chatRoomId: string,
     updateData: UpdateChatRoomData,
     userId: string
@@ -206,7 +207,7 @@ export class ChatRoomService {
       }
 
       // Check if user is admin
-      const isAdmin = await ChatRoomRepository.isUserAdmin(chatRoomId, userId);
+      const isAdmin = await this.chatRoomRepository.isUserAdmin(chatRoomId, userId);
       if (!isAdmin) {
         return {
           success: false,
@@ -215,7 +216,7 @@ export class ChatRoomService {
       }
 
       // Get existing chat room
-      const existingChatRoom = await ChatRoomRepository.getChatRoomById(chatRoomId);
+      const existingChatRoom = await this.chatRoomRepository.getChatRoomById(chatRoomId);
       if (!existingChatRoom) {
         return {
           success: false,
@@ -232,10 +233,10 @@ export class ChatRoomService {
       }
 
       // Update chat room
-      const updatedChatRoom = await ChatRoomRepository.updateChatRoom(chatRoomId, validation.sanitizedData!);
+      const updatedChatRoom = await this.chatRoomRepository.updateChatRoom(chatRoomId, validation.sanitizedData!);
 
       // Get updated chat room with details
-      const chatRoomWithDetails = await ChatRoomRepository.getChatRoomByIdWithDetails(chatRoomId);
+      const chatRoomWithDetails = await this.chatRoomRepository.getChatRoomByIdWithDetails(chatRoomId);
 
       // Convert to API format
       const apiChatRoom = ChatRoomConverter.toApiChatRoomWithDetails(chatRoomWithDetails!);
@@ -258,7 +259,7 @@ export class ChatRoomService {
   /**
    * Delete chat room
    */
-  static async deleteChatRoom(chatRoomId: string, userId: string): Promise<ApiResponse> {
+  async deleteChatRoom(chatRoomId: string, userId: string): Promise<ApiResponse> {
     try {
       // Validate chat room ID
       if (!ValidationUtils.isValidUUID(chatRoomId)) {
@@ -269,7 +270,7 @@ export class ChatRoomService {
       }
 
       // Check if user is admin or creator
-      const chatRoom = await ChatRoomRepository.getChatRoomById(chatRoomId);
+      const chatRoom = await this.chatRoomRepository.getChatRoomById(chatRoomId);
       if (!chatRoom) {
         return {
           success: false,
@@ -277,7 +278,7 @@ export class ChatRoomService {
         };
       }
 
-      const isAdmin = await ChatRoomRepository.isUserAdmin(chatRoomId, userId);
+      const isAdmin = await this.chatRoomRepository.isUserAdmin(chatRoomId, userId);
       const isCreator = chatRoom.createdBy === userId;
 
       if (!isAdmin && !isCreator) {
@@ -288,7 +289,7 @@ export class ChatRoomService {
       }
 
       // Delete chat room (this will cascade delete participants and messages)
-      await ChatRoomRepository.deleteChatRoom(chatRoomId);
+      await this.chatRoomRepository.deleteChatRoom(chatRoomId);
 
       return {
         success: true,
@@ -307,7 +308,7 @@ export class ChatRoomService {
   /**
    * Add participant to chat room
    */
-  static async addParticipant(
+  async addParticipant(
     chatRoomId: string,
     participantData: AddParticipantData,
     userId: string
@@ -331,7 +332,7 @@ export class ChatRoomService {
       }
 
       // Check if user is admin
-      const isAdmin = await ChatRoomRepository.isUserAdmin(chatRoomId, userId);
+      const isAdmin = await this.chatRoomRepository.isUserAdmin(chatRoomId, userId);
       if (!isAdmin) {
         return {
           success: false,
@@ -340,7 +341,7 @@ export class ChatRoomService {
       }
 
       // Get chat room
-      const chatRoom = await ChatRoomRepository.getChatRoomById(chatRoomId);
+      const chatRoom = await this.chatRoomRepository.getChatRoomById(chatRoomId);
       if (!chatRoom) {
         return {
           success: false,
@@ -357,7 +358,7 @@ export class ChatRoomService {
       }
 
       // Check if user is already a participant
-      const isAlreadyParticipant = await ChatRoomRepository.isUserParticipant(
+      const isAlreadyParticipant = await this.chatRoomRepository.isUserParticipant(
         chatRoomId,
         validation.sanitizedData!.userId
       );
@@ -370,7 +371,7 @@ export class ChatRoomService {
       }
 
       // Verify user exists
-      const userExists = await ChatRoomRepository.verifyUsersExist([validation.sanitizedData!.userId]);
+      const userExists = await this.chatRoomRepository.verifyUsersExist([validation.sanitizedData!.userId]);
       if (!userExists) {
         return {
           success: false,
@@ -379,7 +380,7 @@ export class ChatRoomService {
       }
 
       // Add participant
-      const participant = await ChatRoomRepository.addParticipant(chatRoomId, validation.sanitizedData!);
+      const participant = await this.chatRoomRepository.addParticipant(chatRoomId, validation.sanitizedData!);
 
       // Convert to API format
       const apiParticipant = ChatRoomConverter.toApiChatRoomParticipant(participant);
@@ -402,7 +403,7 @@ export class ChatRoomService {
   /**
    * Remove participant from chat room
    */
-  static async removeParticipant(
+  async removeParticipant(
     chatRoomId: string,
     participantUserId: string,
     userId: string
@@ -417,7 +418,7 @@ export class ChatRoomService {
       }
 
       // Get chat room
-      const chatRoom = await ChatRoomRepository.getChatRoomById(chatRoomId);
+      const chatRoom = await this.chatRoomRepository.getChatRoomById(chatRoomId);
       if (!chatRoom) {
         return {
           success: false,
@@ -434,7 +435,7 @@ export class ChatRoomService {
       }
 
       // Check permissions: admin can remove anyone, users can remove themselves
-      const isAdmin = await ChatRoomRepository.isUserAdmin(chatRoomId, userId);
+      const isAdmin = await this.chatRoomRepository.isUserAdmin(chatRoomId, userId);
       const isSelfRemoval = userId === participantUserId;
 
       if (!isAdmin && !isSelfRemoval) {
@@ -445,7 +446,7 @@ export class ChatRoomService {
       }
 
       // Get all participants to check removal constraints
-      const participants = await ChatRoomRepository.getChatRoomParticipants(chatRoomId);
+      const participants = await this.chatRoomRepository.getChatRoomParticipants(chatRoomId);
 
       // Check if removal is allowed (must maintain at least one admin)
       const apiParticipants = participants.map(p => ({
@@ -469,7 +470,7 @@ export class ChatRoomService {
       }
 
       // Remove participant
-      await ChatRoomRepository.removeParticipant(chatRoomId, participantUserId);
+      await this.chatRoomRepository.removeParticipant(chatRoomId, participantUserId);
 
       return {
         success: true,
@@ -488,7 +489,7 @@ export class ChatRoomService {
   /**
    * Update participant role
    */
-  static async updateParticipantRole(
+  async updateParticipantRole(
     chatRoomId: string,
     participantUserId: string,
     updateData: UpdateParticipantData,
@@ -513,7 +514,7 @@ export class ChatRoomService {
       }
 
       // Check if user is admin
-      const isAdmin = await ChatRoomRepository.isUserAdmin(chatRoomId, userId);
+      const isAdmin = await this.chatRoomRepository.isUserAdmin(chatRoomId, userId);
       if (!isAdmin) {
         return {
           success: false,
@@ -522,7 +523,7 @@ export class ChatRoomService {
       }
 
       // Get chat room
-      const chatRoom = await ChatRoomRepository.getChatRoomById(chatRoomId);
+      const chatRoom = await this.chatRoomRepository.getChatRoomById(chatRoomId);
       if (!chatRoom) {
         return {
           success: false,
@@ -539,7 +540,7 @@ export class ChatRoomService {
       }
 
       // Get current participant
-      const currentParticipant = await ChatRoomRepository.getParticipant(chatRoomId, participantUserId);
+      const currentParticipant = await this.chatRoomRepository.getParticipant(chatRoomId, participantUserId);
       if (!currentParticipant) {
         return {
           success: false,
@@ -549,7 +550,7 @@ export class ChatRoomService {
 
       // If demoting an admin, ensure at least one admin remains
       if (currentParticipant.role === USER_ROLES.ADMIN && validation.sanitizedData!.role === USER_ROLES.MEMBER) {
-        const participants = await ChatRoomRepository.getChatRoomParticipants(chatRoomId);
+        const participants = await this.chatRoomRepository.getChatRoomParticipants(chatRoomId);
         const apiParticipants = participants.map(p => ({
           chatRoomId: p.chatRoomId,
           userId: p.userId,
@@ -573,7 +574,7 @@ export class ChatRoomService {
       }
 
       // Update participant role
-      const updatedParticipant = await ChatRoomRepository.updateParticipantRole(
+      const updatedParticipant = await this.chatRoomRepository.updateParticipantRole(
         chatRoomId,
         participantUserId,
         validation.sanitizedData!.role!
@@ -600,7 +601,7 @@ export class ChatRoomService {
   /**
    * Leave chat room
    */
-  static async leaveChatRoom(chatRoomId: string, userId: string): Promise<ApiResponse> {
+  async leaveChatRoom(chatRoomId: string, userId: string): Promise<ApiResponse> {
     try {
       // Validate chat room ID
       if (!ValidationUtils.isValidUUID(chatRoomId)) {
@@ -611,7 +612,7 @@ export class ChatRoomService {
       }
 
       // Get chat room
-      const chatRoom = await ChatRoomRepository.getChatRoomById(chatRoomId);
+      const chatRoom = await this.chatRoomRepository.getChatRoomById(chatRoomId);
       if (!chatRoom) {
         return {
           success: false,
@@ -628,7 +629,7 @@ export class ChatRoomService {
       }
 
       // Check if user is participant
-      const isParticipant = await ChatRoomRepository.isUserParticipant(chatRoomId, userId);
+      const isParticipant = await this.chatRoomRepository.isUserParticipant(chatRoomId, userId);
       if (!isParticipant) {
         return {
           success: false,
@@ -637,7 +638,7 @@ export class ChatRoomService {
       }
 
       // Get all participants to check constraints
-      const participants = await ChatRoomRepository.getChatRoomParticipants(chatRoomId);
+      const participants = await this.chatRoomRepository.getChatRoomParticipants(chatRoomId);
 
       // Check if user can leave (must maintain at least one admin)
       const apiParticipants = participants.map(p => ({
@@ -661,7 +662,7 @@ export class ChatRoomService {
       }
 
       // Remove user from chat room
-      await ChatRoomRepository.removeParticipant(chatRoomId, userId);
+      await this.chatRoomRepository.removeParticipant(chatRoomId, userId);
 
       return {
         success: true,
@@ -682,7 +683,7 @@ export class ChatRoomService {
    * This implements chat deletion with proper isolation - removes chat from user's view
    * while preserving it for other participants
    */
-  static async hideChatRoom(chatRoomId: string, userId: string): Promise<ApiResponse> {
+  async hideChatRoom(chatRoomId: string, userId: string): Promise<ApiResponse> {
     try {
       // Validate chat room ID
       if (!ValidationUtils.isValidUUID(chatRoomId)) {
@@ -693,7 +694,7 @@ export class ChatRoomService {
       }
 
       // Check if user is participant
-      const isParticipant = await ChatRoomRepository.isUserParticipant(chatRoomId, userId);
+      const isParticipant = await this.chatRoomRepository.isUserParticipant(chatRoomId, userId);
       if (!isParticipant) {
         return {
           success: false,
@@ -702,7 +703,7 @@ export class ChatRoomService {
       }
 
       // Hide chat room for user
-      await ChatRoomRepository.hideChatRoomForUser(chatRoomId, userId);
+      await this.chatRoomRepository.hideChatRoomForUser(chatRoomId, userId);
 
       return {
         success: true,
@@ -721,7 +722,7 @@ export class ChatRoomService {
   /**
    * Unhide chat room for user
    */
-  static async unhideChatRoom(chatRoomId: string, userId: string): Promise<ApiResponse> {
+  async unhideChatRoom(chatRoomId: string, userId: string): Promise<ApiResponse> {
     try {
       // Validate chat room ID
       if (!ValidationUtils.isValidUUID(chatRoomId)) {
@@ -732,7 +733,7 @@ export class ChatRoomService {
       }
 
       // Check if user is participant
-      const isParticipant = await ChatRoomRepository.isUserParticipant(chatRoomId, userId);
+      const isParticipant = await this.chatRoomRepository.isUserParticipant(chatRoomId, userId);
       if (!isParticipant) {
         return {
           success: false,
@@ -741,7 +742,7 @@ export class ChatRoomService {
       }
 
       // Unhide chat room for user
-      await ChatRoomRepository.unhideChatRoomForUser(chatRoomId, userId);
+      await this.chatRoomRepository.unhideChatRoomForUser(chatRoomId, userId);
 
       return {
         success: true,
@@ -760,7 +761,7 @@ export class ChatRoomService {
   /**
    * Get user's hidden chat rooms
    */
-  static async getUserHiddenChatRooms(
+  async getUserHiddenChatRooms(
     userId: string,
     limit: number = 20,
     offset: number = 0
@@ -782,7 +783,7 @@ export class ChatRoomService {
       }
 
       // Get user's hidden chat rooms
-      const hiddenChatRooms = await ChatRoomRepository.getUserHiddenChatRooms(userId, limit, offset);
+      const hiddenChatRooms = await this.chatRoomRepository.getUserHiddenChatRooms(userId, limit, offset);
 
       // Convert to API format
       const apiChatRooms = hiddenChatRooms.map(chatRoom => 

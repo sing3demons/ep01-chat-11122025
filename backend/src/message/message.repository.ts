@@ -2,9 +2,35 @@ import { Message, User, ChatRoom } from '@prisma/client';
 import prisma from '../config/database';
 import { CreateMessageData, UpdateMessageData, MessageSearchQuery } from './message.model';
 
-export class MessageRepository {
-  static async createMessage(data: CreateMessageData): Promise<Message> {
-    return await prisma.message.create({
+export interface IMessageRepository {
+  createMessage(data: CreateMessageData): Promise<Message>;
+  getMessageById(id: string): Promise<Message | null>;
+  getMessageByIdWithSender(id: string): Promise<any>;
+  getMessagesByChatRoom(
+    chatRoomId: string,
+    limit?: number,
+    offset?: number,
+    before?: Date
+  ): Promise<any[]>;
+  updateMessage(id: string, data: UpdateMessageData): Promise<Message>;
+  deleteMessage(id: string): Promise<Message>;
+  searchMessages(query: MessageSearchQuery, userId: string): Promise<any[]>;
+  isUserParticipantInChatRoom(userId: string, chatRoomId: string): Promise<boolean>;
+  isUserAdminInChatRoom(userId: string, chatRoomId: string): Promise<boolean>;
+  updateChatRoomLastMessage(chatRoomId: string, messageId: string): Promise<ChatRoom>;
+  getChatRoomParticipants(chatRoomId: string): Promise<any[]>;
+  getUndeliveredMessagesForUser(userId: string, chatRoomId?: string): Promise<Message[]>;
+  getUnreadMessageCount(userId: string, chatRoomId?: string): Promise<number>;
+  getChatRoomsWithRecentMessages(userId: string): Promise<any[]>;
+  getChatRoomById(id: string): Promise<ChatRoom | null>;
+  getUserById(id: string): Promise<any>;
+  isUserBlocked(userId: string, blockedUserId: string): Promise<boolean>;
+}
+
+export class MessageRepository implements IMessageRepository {
+  constructor(private readonly prismaInstance = prisma) { }
+  async createMessage(data: CreateMessageData): Promise<Message> {
+    return await this.prismaInstance.message.create({
       data: {
         content: data.content,
         senderId: data.senderId,
@@ -14,20 +40,20 @@ export class MessageRepository {
     });
   }
 
-  static async getMessageById(id: string): Promise<Message | null> {
-    return await prisma.message.findUnique({
+  async getMessageById(id: string): Promise<Message | null> {
+    return await this.prismaInstance.message.findUnique({
       where: { id }
     });
   }
 
-  static async getMessageByIdWithSender(id: string): Promise<any> {
-    return await prisma.message.findUnique({
+  async getMessageByIdWithSender(id: string): Promise<any> {
+    return await this.prismaInstance.message.findUnique({
       where: { id },
       include: { sender: true }
     });
   }
 
-  static async getMessagesByChatRoom(
+  async getMessagesByChatRoom(
     chatRoomId: string,
     limit: number = 50,
     offset: number = 0,
@@ -38,7 +64,7 @@ export class MessageRepository {
       whereClause.createdAt = { lt: before };
     }
 
-    return await prisma.message.findMany({
+    return await this.prismaInstance.message.findMany({
       where: whereClause,
       include: {
         sender: {
@@ -55,20 +81,20 @@ export class MessageRepository {
     });
   }
 
-  static async updateMessage(id: string, data: UpdateMessageData): Promise<Message> {
-    return await prisma.message.update({
+  async updateMessage(id: string, data: UpdateMessageData): Promise<Message> {
+    return await this.prismaInstance.message.update({
       where: { id },
       data
     });
   }
 
-  static async deleteMessage(id: string): Promise<Message> {
-    return await prisma.message.delete({
+  async deleteMessage(id: string): Promise<Message> {
+    return await this.prismaInstance.message.delete({
       where: { id }
     });
   }
 
-  static async searchMessages(query: MessageSearchQuery, userId: string): Promise<any[]> {
+  async searchMessages(query: MessageSearchQuery, userId: string): Promise<any[]> {
     const whereClause: any = {
       content: { contains: query.query, mode: 'insensitive' }
     };
@@ -91,7 +117,7 @@ export class MessageRepository {
       if (query.toDate) whereClause.createdAt.lte = query.toDate;
     }
 
-    return await prisma.message.findMany({
+    return await this.prismaInstance.message.findMany({
       where: whereClause,
       include: {
         sender: {
@@ -104,8 +130,8 @@ export class MessageRepository {
     });
   }
 
-  static async isUserParticipantInChatRoom(userId: string, chatRoomId: string): Promise<boolean> {
-    const participant = await prisma.chatRoomParticipant.findUnique({
+  async isUserParticipantInChatRoom(userId: string, chatRoomId: string): Promise<boolean> {
+    const participant = await this.prismaInstance.chatRoomParticipant.findUnique({
       where: {
         chatRoomId_userId: { chatRoomId, userId }
       }
@@ -113,22 +139,22 @@ export class MessageRepository {
     return participant !== null;
   }
 
-  static async isUserAdminInChatRoom(userId: string, chatRoomId: string): Promise<boolean> {
-    const participant = await prisma.chatRoomParticipant.findUnique({
+  async isUserAdminInChatRoom(userId: string, chatRoomId: string): Promise<boolean> {
+    const participant = await this.prismaInstance.chatRoomParticipant.findUnique({
       where: { chatRoomId_userId: { chatRoomId, userId } }
     });
     return participant?.role === 'admin';
   }
 
-  static async updateChatRoomLastMessage(chatRoomId: string, messageId: string): Promise<ChatRoom> {
-    return await prisma.chatRoom.update({
+  async updateChatRoomLastMessage(chatRoomId: string, messageId: string): Promise<ChatRoom> {
+    return await this.prismaInstance.chatRoom.update({
       where: { id: chatRoomId },
       data: { lastMessageAt: new Date() }
     });
   }
 
-  static async getChatRoomParticipants(chatRoomId: string): Promise<any[]> {
-    return await prisma.chatRoomParticipant.findMany({
+  async getChatRoomParticipants(chatRoomId: string): Promise<any[]> {
+    return await this.prismaInstance.chatRoomParticipant.findMany({
       where: { chatRoomId },
       include: {
         user: {
@@ -142,7 +168,7 @@ export class MessageRepository {
     });
   }
 
-  static async getUndeliveredMessagesForUser(userId: string, chatRoomId?: string): Promise<Message[]> {
+  async getUndeliveredMessagesForUser(userId: string, chatRoomId?: string): Promise<Message[]> {
     const whereClause: any = {
       status: 'sent',
       senderId: { not: userId },
@@ -155,13 +181,13 @@ export class MessageRepository {
       whereClause.chatRoomId = chatRoomId;
     }
 
-    return await prisma.message.findMany({
+    return await this.prismaInstance.message.findMany({
       where: whereClause,
       orderBy: { createdAt: 'asc' }
     });
   }
 
-  static async getUnreadMessageCount(userId: string, chatRoomId?: string): Promise<number> {
+  async getUnreadMessageCount(userId: string, chatRoomId?: string): Promise<number> {
     const whereClause: any = {
       senderId: { not: userId },
       status: { in: ['sent', 'delivered'] },
@@ -174,13 +200,13 @@ export class MessageRepository {
       whereClause.chatRoomId = chatRoomId;
     }
 
-    return await prisma.message.count({
+    return await this.prismaInstance.message.count({
       where: whereClause
     });
   }
 
-  static async getChatRoomsWithRecentMessages(userId: string): Promise<any[]> {
-    return await prisma.chatRoom.findMany({
+  async getChatRoomsWithRecentMessages(userId: string): Promise<any[]> {
+    return await this.prismaInstance.chatRoom.findMany({
       where: {
         participants: { some: { userId } }
       },
@@ -209,7 +235,7 @@ export class MessageRepository {
         }
       },
       orderBy: { lastMessageAt: 'desc' }
-    }).then(chatRooms => 
+    }).then(chatRooms =>
       chatRooms.map(chatRoom => ({
         ...chatRoom,
         lastMessage: chatRoom.messages[0] || null,
@@ -221,8 +247,8 @@ export class MessageRepository {
   /**
    * Get chat room by ID
    */
-  static async getChatRoomById(id: string): Promise<ChatRoom | null> {
-    return await prisma.chatRoom.findUnique({
+  async getChatRoomById(id: string): Promise<ChatRoom | null> {
+    return await this.prismaInstance.chatRoom.findUnique({
       where: { id }
     });
   }
@@ -230,8 +256,8 @@ export class MessageRepository {
   /**
    * Get user by ID
    */
-  static async getUserById(id: string): Promise<any> {
-    return await prisma.user.findUnique({
+  async getUserById(id: string): Promise<any> {
+    return await this.prismaInstance.user.findUnique({
       where: { id },
       select: {
         id: true,
@@ -247,8 +273,8 @@ export class MessageRepository {
   /**
    * Check if user is blocked by another user
    */
-  static async isUserBlocked(userId: string, blockedUserId: string): Promise<boolean> {
-    const blocked = await prisma.blockedUser.findUnique({
+  async isUserBlocked(userId: string, blockedUserId: string): Promise<boolean> {
+    const blocked = await this.prismaInstance.blockedUser.findUnique({
       where: {
         userId_blockedUserId: {
           userId,

@@ -19,18 +19,44 @@ export interface DeviceSessionData {
   lastSyncAt?: Date;
 }
 
+export interface IOfflineRepository {
+  createQueuedMessage(data: QueuedMessageData): Promise<any>;
+  getQueuedMessagesByUser(userId: string): Promise<any[]>;
+  getQueuedMessageById(id: string): Promise<any | null>;
+  updateQueuedMessage(id: string, data: Partial<QueuedMessageData>): Promise<any>;
+  deleteQueuedMessage(id: string): Promise<void>;
+  deleteQueuedMessagesByUser(userId: string): Promise<void>;
+  getQueuedMessagesForRetry(): Promise<any[]>;
+  upsertDeviceSession(data: DeviceSessionData): Promise<any>;
+  getDeviceSessionsByUser(userId: string): Promise<any[]>;
+  getActiveDeviceSessionsByUser(userId: string): Promise<any[]>;
+  getDeviceSession(userId: string, deviceId: string): Promise<any | null>;
+  updateDeviceSession(userId: string, deviceId: string, data: Partial<DeviceSessionData>): Promise<any>;
+  deactivateDeviceSession(userId: string, deviceId: string): Promise<any>;
+  deleteDeviceSession(userId: string, deviceId: string): Promise<void>;
+  deleteOldInactiveSessions(olderThanDays?: number): Promise<number>;
+  getOfflineStats(): Promise<{
+    totalQueuedMessages: number;
+    totalDeviceSessions: number;
+    activeDeviceSessions: number;
+    usersWithQueuedMessages: number;
+    usersWithActiveSessions: number;
+  }>;
+  cleanupOldQueuedMessages(olderThanHours?: number): Promise<number>;
+}
+
 /**
  * Offline Repository
  * Handles database operations for offline support features
  */
-export class OfflineRepository {
-  private static prisma: PrismaClient = database;
+export class OfflineRepository implements IOfflineRepository {
+  constructor(private readonly prismaInstance: PrismaClient = database) {}
 
   /**
    * Create queued message
    */
-  static async createQueuedMessage(data: QueuedMessageData): Promise<any> {
-    return await this.prisma.queuedMessage.create({
+  async createQueuedMessage(data: QueuedMessageData): Promise<any> {
+    return await this.prismaInstance.queuedMessage.create({
       data: {
         userId: data.userId,
         messageData: data.messageData,
@@ -44,8 +70,8 @@ export class OfflineRepository {
   /**
    * Get queued messages for user
    */
-  static async getQueuedMessagesByUser(userId: string): Promise<any[]> {
-    return await this.prisma.queuedMessage.findMany({
+  async getQueuedMessagesByUser(userId: string): Promise<any[]> {
+    return await this.prismaInstance.queuedMessage.findMany({
       where: { userId },
       orderBy: { createdAt: 'asc' }
     });
@@ -54,8 +80,8 @@ export class OfflineRepository {
   /**
    * Get queued message by ID
    */
-  static async getQueuedMessageById(id: string): Promise<any | null> {
-    return await this.prisma.queuedMessage.findUnique({
+  async getQueuedMessageById(id: string): Promise<any | null> {
+    return await this.prismaInstance.queuedMessage.findUnique({
       where: { id }
     });
   }
@@ -63,8 +89,8 @@ export class OfflineRepository {
   /**
    * Update queued message
    */
-  static async updateQueuedMessage(id: string, data: Partial<QueuedMessageData>): Promise<any> {
-    return await this.prisma.queuedMessage.update({
+  async updateQueuedMessage(id: string, data: Partial<QueuedMessageData>): Promise<any> {
+    return await this.prismaInstance.queuedMessage.update({
       where: { id },
       data: {
         ...(data.retryCount !== undefined && { retryCount: data.retryCount }),
@@ -78,8 +104,8 @@ export class OfflineRepository {
   /**
    * Delete queued message
    */
-  static async deleteQueuedMessage(id: string): Promise<void> {
-    await this.prisma.queuedMessage.delete({
+  async deleteQueuedMessage(id: string): Promise<void> {
+    await this.prismaInstance.queuedMessage.delete({
       where: { id }
     });
   }
@@ -87,8 +113,8 @@ export class OfflineRepository {
   /**
    * Delete queued messages for user
    */
-  static async deleteQueuedMessagesByUser(userId: string): Promise<void> {
-    await this.prisma.queuedMessage.deleteMany({
+  async deleteQueuedMessagesByUser(userId: string): Promise<void> {
+    await this.prismaInstance.queuedMessage.deleteMany({
       where: { userId }
     });
   }
@@ -96,8 +122,8 @@ export class OfflineRepository {
   /**
    * Get queued messages ready for retry
    */
-  static async getQueuedMessagesForRetry(): Promise<any[]> {
-    return await this.prisma.queuedMessage.findMany({
+  async getQueuedMessagesForRetry(): Promise<any[]> {
+    return await this.prismaInstance.queuedMessage.findMany({
       where: {
         nextRetryAt: {
           lte: new Date()
@@ -119,8 +145,8 @@ export class OfflineRepository {
   /**
    * Create or update device session
    */
-  static async upsertDeviceSession(data: DeviceSessionData): Promise<any> {
-    return await this.prisma.deviceSession.upsert({
+  async upsertDeviceSession(data: DeviceSessionData): Promise<any> {
+    return await this.prismaInstance.deviceSession.upsert({
       where: {
         userId_deviceId: {
           userId: data.userId,
@@ -145,8 +171,8 @@ export class OfflineRepository {
   /**
    * Get device sessions for user
    */
-  static async getDeviceSessionsByUser(userId: string): Promise<any[]> {
-    return await this.prisma.deviceSession.findMany({
+  async getDeviceSessionsByUser(userId: string): Promise<any[]> {
+    return await this.prismaInstance.deviceSession.findMany({
       where: { userId },
       orderBy: { lastSyncAt: 'desc' }
     });
@@ -155,8 +181,8 @@ export class OfflineRepository {
   /**
    * Get active device sessions for user
    */
-  static async getActiveDeviceSessionsByUser(userId: string): Promise<any[]> {
-    return await this.prisma.deviceSession.findMany({
+  async getActiveDeviceSessionsByUser(userId: string): Promise<any[]> {
+    return await this.prismaInstance.deviceSession.findMany({
       where: { 
         userId,
         isActive: true
@@ -168,8 +194,8 @@ export class OfflineRepository {
   /**
    * Get device session by user and device
    */
-  static async getDeviceSession(userId: string, deviceId: string): Promise<any | null> {
-    return await this.prisma.deviceSession.findUnique({
+  async getDeviceSession(userId: string, deviceId: string): Promise<any | null> {
+    return await this.prismaInstance.deviceSession.findUnique({
       where: {
         userId_deviceId: {
           userId,
@@ -182,12 +208,12 @@ export class OfflineRepository {
   /**
    * Update device session
    */
-  static async updateDeviceSession(
+  async updateDeviceSession(
     userId: string, 
     deviceId: string, 
     data: Partial<DeviceSessionData>
   ): Promise<any> {
-    return await this.prisma.deviceSession.update({
+    return await this.prismaInstance.deviceSession.update({
       where: {
         userId_deviceId: {
           userId,
@@ -205,8 +231,8 @@ export class OfflineRepository {
   /**
    * Deactivate device session
    */
-  static async deactivateDeviceSession(userId: string, deviceId: string): Promise<any> {
-    return await this.prisma.deviceSession.update({
+  async deactivateDeviceSession(userId: string, deviceId: string): Promise<any> {
+    return await this.prismaInstance.deviceSession.update({
       where: {
         userId_deviceId: {
           userId,
@@ -223,8 +249,8 @@ export class OfflineRepository {
   /**
    * Delete device session
    */
-  static async deleteDeviceSession(userId: string, deviceId: string): Promise<void> {
-    await this.prisma.deviceSession.delete({
+  async deleteDeviceSession(userId: string, deviceId: string): Promise<void> {
+    await this.prismaInstance.deviceSession.delete({
       where: {
         userId_deviceId: {
           userId,
@@ -237,11 +263,11 @@ export class OfflineRepository {
   /**
    * Delete old inactive device sessions
    */
-  static async deleteOldInactiveSessions(olderThanDays: number = 30): Promise<number> {
+  async deleteOldInactiveSessions(olderThanDays: number = 30): Promise<number> {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
 
-    const result = await this.prisma.deviceSession.deleteMany({
+    const result = await this.prismaInstance.deviceSession.deleteMany({
       where: {
         isActive: false,
         lastSyncAt: {
@@ -256,7 +282,7 @@ export class OfflineRepository {
   /**
    * Get offline support statistics
    */
-  static async getOfflineStats(): Promise<{
+  async getOfflineStats(): Promise<{
     totalQueuedMessages: number;
     totalDeviceSessions: number;
     activeDeviceSessions: number;
@@ -270,14 +296,14 @@ export class OfflineRepository {
       usersWithQueuedMessages,
       usersWithActiveSessions
     ] = await Promise.all([
-      this.prisma.queuedMessage.count(),
-      this.prisma.deviceSession.count(),
-      this.prisma.deviceSession.count({ where: { isActive: true } }),
-      this.prisma.queuedMessage.groupBy({
+      this.prismaInstance.queuedMessage.count(),
+      this.prismaInstance.deviceSession.count(),
+      this.prismaInstance.deviceSession.count({ where: { isActive: true } }),
+      this.prismaInstance.queuedMessage.groupBy({
         by: ['userId'],
         _count: { userId: true }
       }).then(result => result.length),
-      this.prisma.deviceSession.groupBy({
+      this.prismaInstance.deviceSession.groupBy({
         by: ['userId'],
         where: { isActive: true },
         _count: { userId: true }
@@ -296,11 +322,11 @@ export class OfflineRepository {
   /**
    * Clean up old queued messages
    */
-  static async cleanupOldQueuedMessages(olderThanHours: number = 24): Promise<number> {
+  async cleanupOldQueuedMessages(olderThanHours: number = 24): Promise<number> {
     const cutoffDate = new Date();
     cutoffDate.setHours(cutoffDate.getHours() - olderThanHours);
 
-    const result = await this.prisma.queuedMessage.deleteMany({
+    const result = await this.prismaInstance.queuedMessage.deleteMany({
       where: {
         createdAt: {
           lt: cutoffDate

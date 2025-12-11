@@ -7,11 +7,12 @@ import { HTTP_STATUS } from '../config/constants';
  * Handles HTTP requests and responses for chat room operations
  */
 export class ChatRoomController {
+  constructor(private readonly chatRoomService: ChatRoomService) { }
   /**
    * Create a new chat room
    * POST /chatrooms
    */
-  static async createChatRoom(req: Request, res: Response): Promise<void> {
+  createChatRoom = async (req: Request, res: Response): Promise<void> => {
     try {
       const currentUserId = req.user?.id;
 
@@ -28,7 +29,7 @@ export class ChatRoomController {
         createdBy: currentUserId
       };
 
-      const result = await ChatRoomService.createChatRoom(chatRoomData);
+      const result = await this.chatRoomService.createChatRoom(chatRoomData);
 
       if (result.success) {
         res.status(HTTP_STATUS.CREATED).json(result);
@@ -48,7 +49,7 @@ export class ChatRoomController {
    * Get chat room by ID
    * GET /chatrooms/:id
    */
-  static async getChatRoomById(req: Request, res: Response): Promise<void> {
+  getChatRoomById = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const currentUserId = req.user?.id;
@@ -69,7 +70,7 @@ export class ChatRoomController {
         return;
       }
 
-      const result = await ChatRoomService.getChatRoomById(id, currentUserId);
+      const result = await this.chatRoomService.getChatRoomById(id, currentUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -89,7 +90,7 @@ export class ChatRoomController {
    * Get user's chat rooms
    * GET /chatrooms
    */
-  static async getUserChatRooms(req: Request, res: Response): Promise<void> {
+  getUserChatRooms = async (req: Request, res: Response): Promise<void> => {
     try {
       const currentUserId = req.user?.id;
       const { limit, offset } = req.query;
@@ -102,7 +103,7 @@ export class ChatRoomController {
         return;
       }
 
-      const result = await ChatRoomService.getUserChatRooms(
+      const result = await this.chatRoomService.getUserChatRooms(
         currentUserId,
         limit ? parseInt(limit as string) : undefined,
         offset ? parseInt(offset as string) : undefined
@@ -126,7 +127,7 @@ export class ChatRoomController {
    * Update chat room
    * PUT /chatrooms/:id
    */
-  static async updateChatRoom(req: Request, res: Response): Promise<void> {
+  updateChatRoom = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const currentUserId = req.user?.id;
@@ -147,7 +148,7 @@ export class ChatRoomController {
         return;
       }
 
-      const result = await ChatRoomService.updateChatRoom(id, req.body, currentUserId);
+      const result = await this.chatRoomService.updateChatRoom(id, req.body, currentUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -167,7 +168,7 @@ export class ChatRoomController {
    * Delete chat room
    * DELETE /chatrooms/:id
    */
-  static async deleteChatRoom(req: Request, res: Response): Promise<void> {
+  deleteChatRoom = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const currentUserId = req.user?.id;
@@ -188,7 +189,7 @@ export class ChatRoomController {
         return;
       }
 
-      const result = await ChatRoomService.deleteChatRoom(id, currentUserId);
+      const result = await this.chatRoomService.deleteChatRoom(id, currentUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -208,7 +209,7 @@ export class ChatRoomController {
    * Add participant to chat room
    * POST /chatrooms/:id/participants
    */
-  static async addParticipant(req: Request, res: Response): Promise<void> {
+  addParticipant = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const currentUserId = req.user?.id;
@@ -229,7 +230,7 @@ export class ChatRoomController {
         return;
       }
 
-      const result = await ChatRoomService.addParticipant(id, req.body, currentUserId);
+      const result = await this.chatRoomService.addParticipant(id, req.body, currentUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -249,7 +250,7 @@ export class ChatRoomController {
    * Remove participant from chat room
    * DELETE /chatrooms/:id/participants/:userId
    */
-  static async removeParticipant(req: Request, res: Response): Promise<void> {
+  removeParticipant = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id, userId } = req.params;
       const currentUserId = req.user?.id;
@@ -270,7 +271,7 @@ export class ChatRoomController {
         return;
       }
 
-      const result = await ChatRoomService.removeParticipant(id, userId, currentUserId);
+      const result = await this.chatRoomService.removeParticipant(id, userId, currentUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -290,7 +291,7 @@ export class ChatRoomController {
    * Update participant role
    * PUT /chatrooms/:id/participants/:userId
    */
-  static async updateParticipantRole(req: Request, res: Response): Promise<void> {
+  updateParticipantRole = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id, userId } = req.params;
       const currentUserId = req.user?.id;
@@ -311,7 +312,7 @@ export class ChatRoomController {
         return;
       }
 
-      const result = await ChatRoomService.updateParticipantRole(id, userId, req.body, currentUserId);
+      const result = await this.chatRoomService.updateParticipantRole(id, userId, req.body, currentUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -331,7 +332,7 @@ export class ChatRoomController {
    * Leave chat room
    * POST /chatrooms/:id/leave
    */
-  static async leaveChatRoom(req: Request, res: Response): Promise<void> {
+  leaveChatRoom = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const currentUserId = req.user?.id;
@@ -352,7 +353,7 @@ export class ChatRoomController {
         return;
       }
 
-      const result = await ChatRoomService.leaveChatRoom(id, currentUserId);
+      const result = await this.chatRoomService.leaveChatRoom(id, currentUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -372,7 +373,7 @@ export class ChatRoomController {
    * Hide chat room for user
    * POST /chatrooms/:id/hide
    */
-  static async hideChatRoom(req: Request, res: Response): Promise<void> {
+  hideChatRoom = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const currentUserId = req.user?.id;
@@ -393,7 +394,7 @@ export class ChatRoomController {
         return;
       }
 
-      const result = await ChatRoomService.hideChatRoom(id, currentUserId);
+      const result = await this.chatRoomService.hideChatRoom(id, currentUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -413,7 +414,7 @@ export class ChatRoomController {
    * Unhide chat room for user
    * POST /chatrooms/:id/unhide
    */
-  static async unhideChatRoom(req: Request, res: Response): Promise<void> {
+  unhideChatRoom = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const currentUserId = req.user?.id;
@@ -434,7 +435,7 @@ export class ChatRoomController {
         return;
       }
 
-      const result = await ChatRoomService.unhideChatRoom(id, currentUserId);
+      const result = await this.chatRoomService.unhideChatRoom(id, currentUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -454,7 +455,7 @@ export class ChatRoomController {
    * Get user's hidden chat rooms
    * GET /chatrooms/hidden
    */
-  static async getUserHiddenChatRooms(req: Request, res: Response): Promise<void> {
+  getUserHiddenChatRooms = async (req: Request, res: Response): Promise<void> => {
     try {
       const currentUserId = req.user?.id;
       const { limit, offset } = req.query;
@@ -467,7 +468,7 @@ export class ChatRoomController {
         return;
       }
 
-      const result = await ChatRoomService.getUserHiddenChatRooms(
+      const result = await this.chatRoomService.getUserHiddenChatRooms(
         currentUserId,
         limit ? parseInt(limit as string) : undefined,
         offset ? parseInt(offset as string) : undefined

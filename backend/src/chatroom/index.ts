@@ -8,3 +8,6 @@ export * from './chatroom.controller';
 export * from './chatroom.service';
 export * from './chatroom.repository';
 export { default as chatroomRoutes } from './chatroom.routes';
+
+// Export interfaces
+export type { IChatRoomRepository } from './chatroom.repository';

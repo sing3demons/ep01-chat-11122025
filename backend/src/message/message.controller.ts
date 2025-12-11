@@ -7,11 +7,12 @@ import { HTTP_STATUS } from '../config/constants';
  * Handles HTTP requests and responses for message operations
  */
 export class MessageController {
+  constructor(private readonly messageService: MessageService) { }
   /**
    * Send a new message
    * POST /messages
    */
-  static async sendMessage(req: Request, res: Response): Promise<void> {
+  sendMessage = async (req: Request, res: Response): Promise<void> => {
     try {
       const currentUserId = req.user?.id;
 
@@ -28,7 +29,7 @@ export class MessageController {
         senderId: currentUserId
       };
 
-      const result = await MessageService.sendMessage(messageData);
+      const result = await this.messageService.sendMessage(messageData);
 
       if (result.success) {
         res.status(HTTP_STATUS.CREATED).json(result);
@@ -48,7 +49,7 @@ export class MessageController {
    * Get messages for a chat room
    * GET /messages/chatroom/:chatRoomId
    */
-  static async getMessagesByChatRoom(req: Request, res: Response): Promise<void> {
+  getMessagesByChatRoom = async (req: Request, res: Response): Promise<void> => {
     try {
       const { chatRoomId } = req.params;
       const { limit, offset, before } = req.query;
@@ -70,7 +71,7 @@ export class MessageController {
         return;
       }
 
-      const result = await MessageService.getMessagesByChatRoom(
+      const result = await this.messageService.getMessagesByChatRoom(
         chatRoomId,
         currentUserId,
         limit ? parseInt(limit as string) : undefined,
@@ -96,7 +97,7 @@ export class MessageController {
    * Get message by ID
    * GET /messages/:id
    */
-  static async getMessageById(req: Request, res: Response): Promise<void> {
+  getMessageById = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const currentUserId = req.user?.id;
@@ -117,7 +118,7 @@ export class MessageController {
         return;
       }
 
-      const result = await MessageService.getMessageById(id, currentUserId);
+      const result = await this.messageService.getMessageById(id, currentUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -137,7 +138,7 @@ export class MessageController {
    * Update message
    * PUT /messages/:id
    */
-  static async updateMessage(req: Request, res: Response): Promise<void> {
+  updateMessage = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const currentUserId = req.user?.id;
@@ -158,7 +159,7 @@ export class MessageController {
         return;
       }
 
-      const result = await MessageService.updateMessage(id, req.body, currentUserId);
+      const result = await this.messageService.updateMessage(id, req.body, currentUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -178,7 +179,7 @@ export class MessageController {
    * Delete message
    * DELETE /messages/:id
    */
-  static async deleteMessage(req: Request, res: Response): Promise<void> {
+  deleteMessage = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const currentUserId = req.user?.id;
@@ -199,7 +200,7 @@ export class MessageController {
         return;
       }
 
-      const result = await MessageService.deleteMessage(id, currentUserId);
+      const result = await this.messageService.deleteMessage(id, currentUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -219,7 +220,7 @@ export class MessageController {
    * Mark message as read
    * POST /messages/:id/read
    */
-  static async markAsRead(req: Request, res: Response): Promise<void> {
+  markAsRead = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const currentUserId = req.user?.id;
@@ -240,7 +241,7 @@ export class MessageController {
         return;
       }
 
-      const result = await MessageService.markAsRead(id, currentUserId);
+      const result = await this.messageService.markAsRead(id, currentUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -260,7 +261,7 @@ export class MessageController {
    * Search messages
    * GET /messages/search
    */
-  static async searchMessages(req: Request, res: Response): Promise<void> {
+  searchMessages = async (req: Request, res: Response): Promise<void> => {
     try {
       const currentUserId = req.user?.id;
 
@@ -282,7 +283,7 @@ export class MessageController {
         offset: req.query.offset ? parseInt(req.query.offset as string) : undefined
       };
 
-      const result = await MessageService.searchMessages(searchQuery, currentUserId);
+      const result = await this.messageService.searchMessages(searchQuery, currentUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -302,7 +303,7 @@ export class MessageController {
    * Handle typing indicator
    * POST /messages/typing
    */
-  static async handleTypingIndicator(req: Request, res: Response): Promise<void> {
+  handleTypingIndicator = async (req: Request, res: Response): Promise<void> => {
     try {
       const currentUserId = req.user?.id;
 
@@ -332,7 +333,7 @@ export class MessageController {
         return;
       }
 
-      const result = await MessageService.handleTypingIndicator(
+      const result = await this.messageService.handleTypingIndicator(
         currentUserId,
         chatRoomId,
         isTyping
@@ -356,7 +357,7 @@ export class MessageController {
    * Update message status
    * PUT /messages/:id/status
    */
-  static async updateMessageStatus(req: Request, res: Response): Promise<void> {
+  updateMessageStatus = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const { status } = req.body;
@@ -386,7 +387,7 @@ export class MessageController {
         return;
       }
 
-      const result = await MessageService.updateMessageStatus(id, status, currentUserId);
+      const result = await this.messageService.updateMessageStatus(id, status, currentUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -406,7 +407,7 @@ export class MessageController {
    * Get unread message count
    * GET /messages/unread-count
    */
-  static async getUnreadCount(req: Request, res: Response): Promise<void> {
+  getUnreadCount = async (req: Request, res: Response): Promise<void> => {
     try {
       const currentUserId = req.user?.id;
       const { chatRoomId } = req.query;
@@ -419,7 +420,7 @@ export class MessageController {
         return;
       }
 
-      const result = await MessageService.getUnreadMessageCount(
+      const result = await this.messageService.getUnreadMessageCount(
         currentUserId,
         chatRoomId as string
       );
@@ -442,7 +443,7 @@ export class MessageController {
    * Mark messages as delivered
    * POST /messages/mark-delivered
    */
-  static async markMessagesAsDelivered(req: Request, res: Response): Promise<void> {
+  markMessagesAsDelivered = async (req: Request, res: Response): Promise<void> => {
     try {
       const currentUserId = req.user?.id;
       const { chatRoomId } = req.body;
@@ -455,7 +456,7 @@ export class MessageController {
         return;
       }
 
-      const result = await MessageService.markMessagesAsDelivered(currentUserId, chatRoomId);
+      const result = await this.messageService.markMessagesAsDelivered(currentUserId, chatRoomId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -475,7 +476,7 @@ export class MessageController {
    * Get chat list with recent messages
    * GET /messages/chat-list
    */
-  static async getChatList(req: Request, res: Response): Promise<void> {
+  getChatList = async (req: Request, res: Response): Promise<void> => {
     try {
       const currentUserId = req.user?.id;
 
@@ -487,7 +488,7 @@ export class MessageController {
         return;
       }
 
-      const result = await MessageService.getRecentMessagesForChatList(currentUserId);
+      const result = await this.messageService.getRecentMessagesForChatList(currentUserId);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);

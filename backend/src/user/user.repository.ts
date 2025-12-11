@@ -2,16 +2,45 @@ import { User, PrivacySettings } from '@prisma/client';
 import prisma from '../config/database';
 import { UpdateUserData } from './user.model';
 
+export interface IUserRepository {
+  findUserById(id: string): Promise<User | null>;
+  findUserByIdWithPrivacy(id: string): Promise<(User & { privacySettings?: PrivacySettings | null }) | null>;
+  findUserByEmail(email: string): Promise<User | null>;
+  findUserByUsername(username: string): Promise<User | null>;
+  findUserByEmailOrUsername(email: string, username: string): Promise<User | null>;
+  updateUser(id: string, data: UpdateUserData): Promise<User>;
+  updateUserOnlineStatus(id: string, isOnline: boolean): Promise<User>;
+  searchUsersByUsername(query: string, limit?: number, offset?: number): Promise<(User & { privacySettings?: PrivacySettings | null })[]>;
+  findUsersByIds(ids: string[]): Promise<User[]>;
+  findUsersByIdsWithPrivacy(ids: string[]): Promise<(User & { privacySettings?: PrivacySettings | null })[]>;
+  getPrivacySettings(userId: string): Promise<PrivacySettings | null>;
+  updatePrivacySettings(userId: string, data: Partial<PrivacySettings>): Promise<PrivacySettings>;
+  getOnlineUsersCount(): Promise<number>;
+  getRecentlyActiveUsers(limit?: number, hoursAgo?: number): Promise<User[]>;
+  deleteUser(id: string): Promise<User>;
+  addContact(userId: string, contactId: string): Promise<void>;
+  removeContact(userId: string, contactId: string): Promise<void>;
+  areUsersContacts(userId1: string, userId2: string): Promise<boolean>;
+  getUserContacts(userId: string): Promise<(User & { privacySettings?: PrivacySettings | null })[]>;
+  getMutualContacts(userId1: string, userId2: string): Promise<User[]>;
+  blockUser(userId: string, blockedUserId: string): Promise<void>;
+  unblockUser(userId: string, blockedUserId: string): Promise<void>;
+  isUserBlocked(userId: string, blockedUserId: string): Promise<boolean>;
+  getBlockedUsers(userId: string): Promise<User[]>;
+  isBlockedBy(userId: string, blockerUserId: string): Promise<boolean>;
+}
+
 /**
  * User Repository
  * Handles all database operations related to users
  */
-export class UserRepository {
+export class UserRepository implements IUserRepository {
+  constructor(private readonly prismaInstance = prisma) {}
   /**
    * Find user by ID
    */
-  static async findUserById(id: string): Promise<User | null> {
-    return await prisma.user.findUnique({
+  async findUserById(id: string): Promise<User | null> {
+    return await this.prismaInstance.user.findUnique({
       where: { id }
     });
   }
@@ -19,8 +48,8 @@ export class UserRepository {
   /**
    * Find user by ID with privacy settings
    */
-  static async findUserByIdWithPrivacy(id: string): Promise<(User & { privacySettings?: PrivacySettings | null }) | null> {
-    return await prisma.user.findUnique({
+  async findUserByIdWithPrivacy(id: string): Promise<(User & { privacySettings?: PrivacySettings | null }) | null> {
+    return await this.prismaInstance.user.findUnique({
       where: { id },
       include: {
         privacySettings: true
@@ -31,8 +60,8 @@ export class UserRepository {
   /**
    * Find user by email
    */
-  static async findUserByEmail(email: string): Promise<User | null> {
-    return await prisma.user.findUnique({
+  async findUserByEmail(email: string): Promise<User | null> {
+    return await this.prismaInstance.user.findUnique({
       where: { email }
     });
   }
@@ -40,8 +69,8 @@ export class UserRepository {
   /**
    * Find user by username
    */
-  static async findUserByUsername(username: string): Promise<User | null> {
-    return await prisma.user.findUnique({
+  async findUserByUsername(username: string): Promise<User | null> {
+    return await this.prismaInstance.user.findUnique({
       where: { username }
     });
   }
@@ -49,8 +78,8 @@ export class UserRepository {
   /**
    * Find user by email or username
    */
-  static async findUserByEmailOrUsername(email: string, username: string): Promise<User | null> {
-    return await prisma.user.findFirst({
+  async findUserByEmailOrUsername(email: string, username: string): Promise<User | null> {
+    return await this.prismaInstance.user.findFirst({
       where: {
         OR: [
           { email },
@@ -63,8 +92,8 @@ export class UserRepository {
   /**
    * Update user by ID
    */
-  static async updateUser(id: string, data: UpdateUserData): Promise<User> {
-    return await prisma.user.update({
+  async updateUser(id: string, data: UpdateUserData): Promise<User> {
+    return await this.prismaInstance.user.update({
       where: { id },
       data: {
         ...data,
@@ -76,8 +105,8 @@ export class UserRepository {
   /**
    * Update user online status
    */
-  static async updateUserOnlineStatus(id: string, isOnline: boolean): Promise<User> {
-    return await prisma.user.update({
+  async updateUserOnlineStatus(id: string, isOnline: boolean): Promise<User> {
+    return await this.prismaInstance.user.update({
       where: { id },
       data: {
         isOnline,
@@ -89,12 +118,12 @@ export class UserRepository {
   /**
    * Search users by username
    */
-  static async searchUsersByUsername(
+  async searchUsersByUsername(
     query: string,
     limit: number = 20,
     offset: number = 0
   ): Promise<(User & { privacySettings?: PrivacySettings | null })[]> {
-    return await prisma.user.findMany({
+    return await this.prismaInstance.user.findMany({
       where: {
         username: {
           contains: query,
@@ -115,8 +144,8 @@ export class UserRepository {
   /**
    * Get multiple users by IDs
    */
-  static async findUsersByIds(ids: string[]): Promise<User[]> {
-    return await prisma.user.findMany({
+  async findUsersByIds(ids: string[]): Promise<User[]> {
+    return await this.prismaInstance.user.findMany({
       where: {
         id: {
           in: ids
@@ -128,8 +157,8 @@ export class UserRepository {
   /**
    * Get multiple users by IDs with privacy settings
    */
-  static async findUsersByIdsWithPrivacy(ids: string[]): Promise<(User & { privacySettings?: PrivacySettings | null })[]> {
-    return await prisma.user.findMany({
+  async findUsersByIdsWithPrivacy(ids: string[]): Promise<(User & { privacySettings?: PrivacySettings | null })[]> {
+    return await this.prismaInstance.user.findMany({
       where: {
         id: {
           in: ids
@@ -144,8 +173,8 @@ export class UserRepository {
   /**
    * Get user privacy settings
    */
-  static async getPrivacySettings(userId: string): Promise<PrivacySettings | null> {
-    return await prisma.privacySettings.findUnique({
+  async getPrivacySettings(userId: string): Promise<PrivacySettings | null> {
+    return await this.prismaInstance.privacySettings.findUnique({
       where: { userId }
     });
   }
@@ -153,11 +182,11 @@ export class UserRepository {
   /**
    * Update user privacy settings
    */
-  static async updatePrivacySettings(
+  async updatePrivacySettings(
     userId: string,
     data: Partial<PrivacySettings>
   ): Promise<PrivacySettings> {
-    return await prisma.privacySettings.upsert({
+    return await this.prismaInstance.privacySettings.upsert({
       where: { userId },
       update: {
         ...data,
@@ -176,8 +205,8 @@ export class UserRepository {
   /**
    * Get online users count
    */
-  static async getOnlineUsersCount(): Promise<number> {
-    return await prisma.user.count({
+  async getOnlineUsersCount(): Promise<number> {
+    return await this.prismaInstance.user.count({
       where: {
         isOnline: true
       }
@@ -187,14 +216,14 @@ export class UserRepository {
   /**
    * Get recently active users
    */
-  static async getRecentlyActiveUsers(
+  async getRecentlyActiveUsers(
     limit: number = 10,
     hoursAgo: number = 24
   ): Promise<User[]> {
     const cutoffDate = new Date();
     cutoffDate.setHours(cutoffDate.getHours() - hoursAgo);
 
-    return await prisma.user.findMany({
+    return await this.prismaInstance.user.findMany({
       where: {
         lastSeen: {
           gte: cutoffDate
@@ -210,10 +239,10 @@ export class UserRepository {
   /**
    * Delete user (soft delete by setting inactive)
    */
-  static async deleteUser(id: string): Promise<User> {
+  async deleteUser(id: string): Promise<User> {
     // In a real application, you might want to soft delete
     // For now, we'll just update the user to be offline
-    return await prisma.user.update({
+    return await this.prismaInstance.user.update({
       where: { id },
       data: {
         isOnline: false,
@@ -225,8 +254,8 @@ export class UserRepository {
   /**
    * Add contact relationship
    */
-  static async addContact(userId: string, contactId: string): Promise<void> {
-    await prisma.contact.create({
+  async addContact(userId: string, contactId: string): Promise<void> {
+    await this.prismaInstance.contact.create({
       data: {
         userId,
         contactId
@@ -237,8 +266,8 @@ export class UserRepository {
   /**
    * Remove contact relationship
    */
-  static async removeContact(userId: string, contactId: string): Promise<void> {
-    await prisma.contact.delete({
+  async removeContact(userId: string, contactId: string): Promise<void> {
+    await this.prismaInstance.contact.delete({
       where: {
         userId_contactId: {
           userId,
@@ -251,8 +280,8 @@ export class UserRepository {
   /**
    * Check if users are contacts
    */
-  static async areUsersContacts(userId1: string, userId2: string): Promise<boolean> {
-    const contact = await prisma.contact.findFirst({
+  async areUsersContacts(userId1: string, userId2: string): Promise<boolean> {
+    const contact = await this.prismaInstance.contact.findFirst({
       where: {
         OR: [
           { userId: userId1, contactId: userId2 },
@@ -266,8 +295,8 @@ export class UserRepository {
   /**
    * Get user's contacts with their details
    */
-  static async getUserContacts(userId: string): Promise<(User & { privacySettings?: PrivacySettings | null })[]> {
-    const contacts = await prisma.contact.findMany({
+  async getUserContacts(userId: string): Promise<(User & { privacySettings?: PrivacySettings | null })[]> {
+    const contacts = await this.prismaInstance.contact.findMany({
       where: { userId },
       include: {
         contact: {
@@ -284,8 +313,8 @@ export class UserRepository {
   /**
    * Get mutual contacts between two users
    */
-  static async getMutualContacts(userId1: string, userId2: string): Promise<User[]> {
-    const mutualContacts = await prisma.user.findMany({
+  async getMutualContacts(userId1: string, userId2: string): Promise<User[]> {
+    const mutualContacts = await this.prismaInstance.user.findMany({
       where: {
         AND: [
           {
@@ -308,8 +337,8 @@ export class UserRepository {
   /**
    * Block a user
    */
-  static async blockUser(userId: string, blockedUserId: string): Promise<void> {
-    await prisma.blockedUser.create({
+  async blockUser(userId: string, blockedUserId: string): Promise<void> {
+    await this.prismaInstance.blockedUser.create({
       data: {
         userId,
         blockedUserId
@@ -320,8 +349,8 @@ export class UserRepository {
   /**
    * Unblock a user
    */
-  static async unblockUser(userId: string, blockedUserId: string): Promise<void> {
-    await prisma.blockedUser.delete({
+  async unblockUser(userId: string, blockedUserId: string): Promise<void> {
+    await this.prismaInstance.blockedUser.delete({
       where: {
         userId_blockedUserId: {
           userId,
@@ -334,8 +363,8 @@ export class UserRepository {
   /**
    * Check if user is blocked
    */
-  static async isUserBlocked(userId: string, blockedUserId: string): Promise<boolean> {
-    const blocked = await prisma.blockedUser.findUnique({
+  async isUserBlocked(userId: string, blockedUserId: string): Promise<boolean> {
+    const blocked = await this.prismaInstance.blockedUser.findUnique({
       where: {
         userId_blockedUserId: {
           userId,
@@ -349,8 +378,8 @@ export class UserRepository {
   /**
    * Get user's blocked users list
    */
-  static async getBlockedUsers(userId: string): Promise<User[]> {
-    const blockedUsers = await prisma.blockedUser.findMany({
+  async getBlockedUsers(userId: string): Promise<User[]> {
+    const blockedUsers = await this.prismaInstance.blockedUser.findMany({
       where: { userId },
       include: {
         blockedUser: true
@@ -363,8 +392,8 @@ export class UserRepository {
   /**
    * Check if user is blocked by another user
    */
-  static async isBlockedBy(userId: string, blockerUserId: string): Promise<boolean> {
-    const blocked = await prisma.blockedUser.findUnique({
+  async isBlockedBy(userId: string, blockerUserId: string): Promise<boolean> {
+    const blocked = await this.prismaInstance.blockedUser.findUnique({
       where: {
         userId_blockedUserId: {
           userId: blockerUserId,

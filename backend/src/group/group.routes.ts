@@ -1,5 +1,10 @@
 import { Router } from 'express';
 import { GroupController } from './group.controller';
+import { GroupService } from './group.service';
+import { ChatRoomService } from '../chatroom/chatroom.service';
+import { ChatRoomRepository } from '../chatroom/chatroom.repository';
+import { MessageService } from '../message/message.service';
+import { MessageRepository } from '../message/message.repository';
 import { AuthMiddleware } from '../middleware/auth';
 
 /**
@@ -7,6 +12,14 @@ import { AuthMiddleware } from '../middleware/auth';
  * Defines all HTTP routes for group operations
  */
 const router = Router();
+
+// Create dependencies
+const chatRoomRepository = new ChatRoomRepository();
+const messageRepository = new MessageRepository();
+const chatRoomService = new ChatRoomService(chatRoomRepository);
+const messageService = new MessageService(messageRepository);
+const groupService = new GroupService(chatRoomService, messageService, chatRoomRepository);
+const groupController = new GroupController(groupService);
 
 // Apply authentication middleware to all group routes
 router.use(AuthMiddleware.authenticate);
@@ -17,7 +30,7 @@ router.use(AuthMiddleware.authenticate);
  * @access  Private
  * @body    { name: string, participantIds: string[] }
  */
-router.post('/', GroupController.createGroup);
+router.post('/', groupController.createGroup);
 
 /**
  * @route   GET /api/groups
@@ -25,14 +38,14 @@ router.post('/', GroupController.createGroup);
  * @access  Private
  * @query   { limit?: number, offset?: number }
  */
-router.get('/', GroupController.getUserGroups);
+router.get('/', groupController.getUserGroups);
 
 /**
  * @route   GET /api/groups/:groupId
  * @desc    Get group details
  * @access  Private
  */
-router.get('/:groupId', GroupController.getGroupDetails);
+router.get('/:groupId', groupController.getGroupDetails);
 
 /**
  * @route   PUT /api/groups/:groupId
@@ -40,14 +53,14 @@ router.get('/:groupId', GroupController.getGroupDetails);
  * @access  Private (Admin only)
  * @body    { name?: string }
  */
-router.put('/:groupId', GroupController.updateGroup);
+router.put('/:groupId', groupController.updateGroup);
 
 /**
  * @route   DELETE /api/groups/:groupId
  * @desc    Delete group
  * @access  Private (Admin/Creator only)
  */
-router.delete('/:groupId', GroupController.deleteGroup);
+router.delete('/:groupId', groupController.deleteGroup);
 
 /**
  * @route   POST /api/groups/:groupId/members
@@ -55,14 +68,14 @@ router.delete('/:groupId', GroupController.deleteGroup);
  * @access  Private (Admin only)
  * @body    { userId: string, role?: 'admin' | 'member' }
  */
-router.post('/:groupId/members', GroupController.addMember);
+router.post('/:groupId/members', groupController.addMember);
 
 /**
  * @route   DELETE /api/groups/:groupId/members/:userId
  * @desc    Remove member from group
  * @access  Private (Admin only or self-removal)
  */
-router.delete('/:groupId/members/:userId', GroupController.removeMember);
+router.delete('/:groupId/members/:userId', groupController.removeMember);
 
 /**
  * @route   PUT /api/groups/:groupId/members/:userId/role
@@ -70,7 +83,7 @@ router.delete('/:groupId/members/:userId', GroupController.removeMember);
  * @access  Private (Admin only)
  * @body    { role: 'admin' | 'member' }
  */
-router.put('/:groupId/members/:userId/role', GroupController.updateMemberRole);
+router.put('/:groupId/members/:userId/role', groupController.updateMemberRole);
 
 /**
  * @route   POST /api/groups/:groupId/messages
@@ -78,20 +91,20 @@ router.put('/:groupId/members/:userId/role', GroupController.updateMemberRole);
  * @access  Private (Members only)
  * @body    { content: string }
  */
-router.post('/:groupId/messages', GroupController.sendMessage);
+router.post('/:groupId/messages', groupController.sendMessage);
 
 /**
  * @route   POST /api/groups/:groupId/leave
  * @desc    Leave group
  * @access  Private
  */
-router.post('/:groupId/leave', GroupController.leaveGroup);
+router.post('/:groupId/leave', groupController.leaveGroup);
 
 /**
  * @route   GET /api/groups/:groupId/statistics
  * @desc    Get group statistics
  * @access  Private (Members only)
  */
-router.get('/:groupId/statistics', GroupController.getGroupStatistics);
+router.get('/:groupId/statistics', groupController.getGroupStatistics);
 
 export default router;
