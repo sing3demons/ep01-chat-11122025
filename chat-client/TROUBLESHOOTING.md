@@ -1,306 +1,342 @@
-# Troubleshooting Guide
+# 🛠️ Chat Client Troubleshooting Guide
 
-## Common Issues and Solutions
+## ❌ Common Issues & Solutions
 
-### 1. ❌ Login Failed: Invalid email or password
+### 🔌 WebSocket Connection Issues
 
-**Possible Causes:**
-- User doesn't exist in database
-- Wrong email/password
-- Database connection issues
-- Backend not running
-
-**Solutions:**
-
-#### A. Register a new user first
-```bash
-# In the chat client, choose option 2 (Register) instead of 1 (Login)
-=== Authentication ===
-1. Login
-2. Register
-Choose option: 2
+#### Problem: `dial tcp [::1]:3001: connect: connection refused`
 ```
-
-#### B. Check if backend is running
-```bash
-# Check if backend is accessible
-curl http://localhost:3001/api/health
-
-# Should return:
-{"success":true,"message":"WhatsApp Chat System API is running","timestamp":"..."}
-```
-
-#### C. Check database connection
-```bash
-cd backend
-npx prisma db push
-npx prisma studio  # Opens database browser
-```
-
-#### D. Create a test user manually
-```bash
-cd backend
-# Create a simple test script
-cat > create-test-user.js << 'EOF'
-const { PrismaClient } = require('@prisma/client');
-const bcrypt = require('bcrypt');
-
-const prisma = new PrismaClient();
-
-async function createTestUser() {
-  try {
-    const passwordHash = await bcrypt.hash('password123', 10);
-    
-    const user = await prisma.user.create({
-      data: {
-        username: 'testuser',
-        email: 'test@example.com',
-        passwordHash: passwordHash,
-      },
-    });
-    
-    console.log('✅ Test user created:', user);
-  } catch (error) {
-    console.error('❌ Error:', error.message);
-  } finally {
-    await prisma.$disconnect();
-  }
-}
-
-createTestUser();
-EOF
-
-node create-test-user.js
-```
-
-### 2. 🔌 WebSocket Authentication Error
-
-**Error Message:**
-```
-WebSocket read error: websocket: close 1008 (policy violation): Authentication token required
-```
-
-**Cause:** WebSocket connection is not receiving the JWT token properly.
-
-**Solution:** Update the WebSocket connection in the Go client.
-
-### 3. 🚫 Connection Refused
-
-**Error Message:**
-```
-connection refused
+❌ WebSocket connection failed: dial tcp [::1]:3001: connect: connection refused
 ```
 
 **Solutions:**
 
-#### A. Start the backend server
-```bash
-cd backend
-npm start
-```
+1. **Start Backend Server**
+   ```bash
+   cd backend
+   npm run dev
+   ```
+   
+   ✅ **Expected Output:**
+   ```
+   🚀 Server is running on port 3001
+   📡 WebSocket server is ready
+   ```
 
-#### B. Check if port 3001 is available
-```bash
-# Check what's running on port 3001
-lsof -i :3001
+2. **Check Server Status**
+   ```bash
+   curl http://localhost:3001/api/health
+   ```
+   
+   ✅ **Expected Response:**
+   ```json
+   {"success":true,"message":"Server is healthy"}
+   ```
 
-# If something else is using it, kill it or change backend port
-```
+3. **Verify WebSocket Port**
+   ```bash
+   netstat -an | grep 3001
+   # or
+   lsof -i :3001
+   ```
 
-#### C. Check backend URL
-```bash
-# Make sure you're using the correct URL
-go run main.go http://localhost:3001
-```
+4. **Use HTTP Mode as Fallback**
+   - If WebSocket fails, choose **Option 2** (Send HTTP Message)
+   - HTTP mode works independently of WebSocket
 
-### 4. 📦 Go Module Issues
+---
 
-**Error Message:**
-```
-go: module not found
-```
+### 🔐 Authentication Issues
+
+#### Problem: `❌ Login failed: Invalid credentials`
 
 **Solutions:**
+
+1. **Use Test Users**
+   ```
+   Email: alice@test.com
+   Password: password123
+   
+   Email: bob@test.com
+   Password: password123
+   
+   Email: charlie@test.com
+   Password: password123
+   ```
+
+2. **Create Test Users**
+   ```bash
+   cd backend
+   node create-test-user.js
+   ```
+
+3. **Register New User**
+   - Choose **Option 2** (Register) in main menu
+   - Create new account with unique email
+
+#### Problem: `❌ Failed to send message. Status: 401`
+
+**Solutions:**
+
+1. **Re-login**
+   - JWT token might be expired
+   - Choose **Option 6** (Logout) then login again
+
+2. **Check Backend Server**
+   ```bash
+   curl -H "Authorization: Bearer YOUR_TOKEN" \
+        http://localhost:3001/api/notifications
+   ```
+
+---
+
+### 🌐 Network & Connection Issues
+
+#### Problem: `❌ Failed to create request: connection refused`
+
+**Solutions:**
+
+1. **Check Backend URL**
+   - Default: `http://localhost:3001`
+   - Verify server is running on correct port
+
+2. **Check Firewall**
+   ```bash
+   # macOS
+   sudo pfctl -sr | grep 3001
+   
+   # Linux
+   sudo ufw status
+   
+   # Windows
+   netsh advfirewall show allprofiles
+   ```
+
+3. **Test Network Connectivity**
+   ```bash
+   ping localhost
+   telnet localhost 3001
+   ```
+
+---
+
+### 🏗️ Build Issues
+
+#### Problem: `go: module not found`
+
+**Solutions:**
+
+1. **Initialize Go Module**
+   ```bash
+   cd chat-client
+   go mod init chat-client
+   go mod tidy
+   ```
+
+2. **Install Dependencies**
+   ```bash
+   go get github.com/gorilla/websocket
+   ```
+
+3. **Clean and Rebuild**
+   ```bash
+   go clean
+   go build -o chat-client main.go
+   ```
+
+#### Problem: `command not found: go`
+
+**Solutions:**
+
+1. **Install Go**
+   ```bash
+   # macOS
+   brew install go
+   
+   # Ubuntu/Debian
+   sudo apt install golang-go
+   
+   # Windows
+   # Download from https://golang.org/dl/
+   ```
+
+2. **Set Go Path**
+   ```bash
+   export PATH=$PATH:/usr/local/go/bin
+   export GOPATH=$HOME/go
+   ```
+
+---
+
+### 💬 Chat Functionality Issues
+
+#### Problem: `⚠️ Join a chat room first using /join <room_id>`
+
+**Solutions:**
+
+1. **Join Room Before Sending**
+   ```bash
+   /join room_123
+   /send Hello everyone!
+   ```
+
+2. **Use Menu Option 4**
+   - Choose **Option 4** (Join Chat Room)
+   - Enter room ID manually
+
+3. **Create Group First**
+   - Choose **Option 5** (Create Group)
+   - Then join the created group
+
+#### Problem: Messages not appearing in realtime
+
+**Solutions:**
+
+1. **Check WebSocket Connection**
+   ```bash
+   # In chat client
+   /disconnect
+   # Then reconnect via Option 1
+   ```
+
+2. **Use HTTP Mode**
+   - Choose **Option 2** (Send HTTP Message)
+   - Choose **Option 3** (View Chat History)
+
+3. **Verify Room ID**
+   - Make sure all users are in the same room
+   - Room IDs are case-sensitive
+
+---
+
+## 🔧 Quick Diagnostics
+
+### 1. **Full System Check**
 ```bash
+# Run this script to check everything
 cd chat-client
-go mod tidy
-go mod download
+./demo.sh
+# Choose Option 2 (API Test)
 ```
 
-### 5. 🗄️ Database Issues
-
-**Error Message:**
-```
-Database connection failed
-```
-
-**Solutions:**
-
-#### A. Start PostgreSQL
+### 2. **Backend Health Check**
 ```bash
-# Using Docker (if using docker-compose)
-cd backend
-docker-compose up -d
-
-# Or start PostgreSQL service
-sudo service postgresql start
+curl -s http://localhost:3001/api/health | jq '.'
 ```
 
-#### B. Check database URL
+### 3. **Database Check**
 ```bash
 cd backend
-cat .env | grep DATABASE_URL
+docker-compose ps
+# Should show postgres and redis as "Up"
 ```
 
-#### C. Reset database
+### 4. **WebSocket Test**
 ```bash
-cd backend
-npx prisma db push --force-reset
-npx prisma db seed  # If you have seed data
+# Install wscat if needed
+npm install -g wscat
+
+# Test WebSocket connection
+wscat -c ws://localhost:3001
 ```
 
-## Quick Diagnostic Commands
+---
 
-### Check Backend Health
-```bash
-curl -v http://localhost:3001/api/health
-```
+## 🚀 Step-by-Step Recovery
 
-### Check Database Connection
-```bash
-cd backend
-npx prisma db pull
-```
+### Complete Reset Process
 
-### Check WebSocket Endpoint
-```bash
-# Using wscat (install with: npm install -g wscat)
-wscat -c ws://localhost:3001/ws
-```
+1. **Stop Everything**
+   ```bash
+   # Stop chat client (Ctrl+C)
+   # Stop backend server (Ctrl+C)
+   ```
 
-### Test API Endpoints
-```bash
-# Test registration
-curl -X POST http://localhost:3001/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"username":"testuser","email":"test@example.com","password":"password123"}'
+2. **Restart Backend**
+   ```bash
+   cd backend
+   docker-compose up -d  # Start database
+   npm run dev          # Start backend server
+   ```
 
-# Test login
-curl -X POST http://localhost:3001/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"password123"}'
-```
+3. **Verify Backend**
+   ```bash
+   curl http://localhost:3001/api/health
+   ```
 
-## Step-by-Step Debugging
+4. **Rebuild Client**
+   ```bash
+   cd chat-client
+   go build -o chat-client main.go
+   ```
 
-### 1. Verify Backend is Running
-```bash
-cd backend
-npm start
-# Should see: "🚀 Server is running on port 3001"
-```
+5. **Test Client**
+   ```bash
+   ./chat-client
+   # Try Option 1 (Login) with test credentials
+   ```
 
-### 2. Test API Manually
-```bash
-# Health check
-curl http://localhost:3001/api/health
+---
 
-# Register user
-curl -X POST http://localhost:3001/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"username":"alice","email":"alice@test.com","password":"password123"}'
-```
+## 📞 Getting Help
 
-### 3. Test Go Client
-```bash
-cd chat-client
-go run main.go http://localhost:3001
-# Try registering first, then logging in
-```
+### Debug Information to Collect
 
-### 4. Check Logs
+When reporting issues, include:
+
+1. **System Info**
+   ```bash
+   go version
+   uname -a
+   ```
+
+2. **Backend Status**
+   ```bash
+   curl http://localhost:3001/api/health
+   ```
+
+3. **Error Messages**
+   - Copy exact error messages
+   - Include full stack traces
+
+4. **Network Status**
+   ```bash
+   netstat -an | grep 3001
+   ```
+
+### Common Error Patterns
+
+| Error Message | Likely Cause | Quick Fix |
+|---------------|--------------|-----------|
+| `connection refused` | Backend not running | `npm run dev` |
+| `Invalid credentials` | Wrong login info | Use test users |
+| `Status: 401` | Token expired | Re-login |
+| `command not found` | Go not installed | Install Go |
+| `module not found` | Missing dependencies | `go mod tidy` |
+
+---
+
+## ✅ Success Indicators
+
+### Healthy System Shows:
 ```bash
 # Backend logs
-cd backend
-npm start
-# Watch for error messages
+🚀 Server is running on port 3001
+📡 WebSocket server is ready
 
-# Go client logs
-cd chat-client
-go run main.go http://localhost:3001 2>&1 | tee client.log
+# Client connection
+🔗 Connected to WebSocket server!
+🏠 Joined chat room: room_123
+
+# Message flow
+📤 [14:30] You: Hello!
+📥 [14:31] Alice: Hi there!
 ```
 
-## Environment Setup
+### Performance Benchmarks:
+- **Login**: < 2 seconds
+- **WebSocket Connect**: < 1 second  
+- **Message Send**: < 100ms
+- **Message Receive**: < 50ms
 
-### Required Services
-1. **PostgreSQL** - Database
-2. **Node.js Backend** - API server
-3. **Go Client** - Chat client
-
-### Startup Order
-```bash
-# 1. Start PostgreSQL (if not running)
-docker-compose up -d  # or service postgresql start
-
-# 2. Start Backend
-cd backend && npm start
-
-# 3. Start Client
-cd chat-client && make run
-```
-
-## Common Fixes
-
-### Reset Everything
-```bash
-# Stop all services
-pkill -f "npm start"
-docker-compose down
-
-# Clean and restart
-cd backend
-rm -rf node_modules
-npm install
-npx prisma db push --force-reset
-npm start
-
-# In another terminal
-cd chat-client
-go clean
-go mod tidy
-make run
-```
-
-### Create Fresh Test Data
-```bash
-cd backend
-npx prisma studio
-# Delete all users, then create new ones via the client
-```
-
-## Getting Help
-
-If you're still having issues:
-
-1. **Check the logs** - Both backend and client logs
-2. **Verify environment** - Database, Node.js, Go versions
-3. **Test step by step** - API → WebSocket → Client
-4. **Use the diagnostic commands** above
-
-### Useful Commands for Debugging
-```bash
-# Check what's running on ports
-netstat -tulpn | grep :3001
-netstat -tulpn | grep :5432
-
-# Check environment variables
-cd backend && cat .env
-
-# Check Go environment
-go version
-go env
-
-# Check Node.js environment
-node --version
-npm --version
-```
+Follow this guide to resolve most common issues with the chat client! 🎯

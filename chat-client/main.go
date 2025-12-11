@@ -2,38 +2,19 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
-	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-// API Response structures
-type APIResponse struct {
-	Success bool        `json:"success"`
-	Data    interface{} `json:"data,omitempty"`
-	Error   string      `json:"error,omitempty"`
-	Message string      `json:"message,omitempty"`
-}
-
-type AuthResponse struct {
-	User  User   `json:"user"`
-	Token string `json:"token"`
-}
-
-type User struct {
-	ID       string `json:"id"`
-	Username string `json:"username"`
-	Email    string `json:"email"`
-}
-
+// Message structures
 type Message struct {
 	ID         string    `json:"id"`
 	Content    string    `json:"content"`
@@ -43,643 +24,696 @@ type Message struct {
 	Status     string    `json:"status"`
 }
 
-type Participant struct {
-	ChatRoomID string `json:"chatRoomId"`
-	UserID     string `json:"userId"`
-	Role       string `json:"role"`
-	JoinedAt   time.Time `json:"joinedAt"`
-	User       User   `json:"user"`
-}
-
-type ChatRoom struct {
-	ID               string        `json:"id"`
-	Name             string        `json:"name,omitempty"`
-	Type             string        `json:"type"`
-	CreatedBy        string        `json:"createdBy"`
-	Participants     []Participant `json:"participants"`
-	ParticipantCount int           `json:"participantCount"`
-	CreatedAt        time.Time     `json:"createdAt"`
-	LastMessageAt    time.Time     `json:"lastMessageAt"`
-}
-
-// WebSocket message types
-type WSMessage struct {
+type WebSocketMessage struct {
 	Type string      `json:"type"`
 	Data interface{} `json:"data"`
 }
 
+type AuthResponse struct {
+	Success bool `json:"success"`
+	Data    struct {
+		User struct {
+			ID       string `json:"id"`
+			Username string `json:"username"`
+			Email    string `json:"email"`
+		} `json:"user"`
+		Token string `json:"token"`
+	} `json:"data"`
+}
+
 type ChatClient struct {
-	baseURL    string
-	token      string
-	user       User
-	httpClient *http.Client
-	wsConn     *websocket.Conn
-	currentRoom string
+	conn        *websocket.Conn
+	userID      string
+	username    string
+	token       string
+	chatRoomID  string
+	isConnected bool
+	done        chan struct{}
 }
 
-func NewChatClient(baseURL string) *ChatClient {
-	return &ChatClient{
-		baseURL: baseURL,
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+func main() {
+	fmt.Println("🚀 WhatsApp Chat Client")
+	fmt.Println("========================")
+
+	client := &ChatClient{
+		done: make(chan struct{}),
 	}
+
+	// Show main menu
+	client.showMainMenu()
 }
 
-func (c *ChatClient) makeRequest(method, endpoint string, body interface{}) (*APIResponse, error) {
-	var reqBody io.Reader
-	if body != nil {
-		jsonData, err := json.Marshal(body)
-		if err != nil {
-			return nil, err
+func (c *ChatClient) showMainMenu() {
+	for {
+		fmt.Println("\n📋 Choose an option:")
+		fmt.Println("1. Login")
+		fmt.Println("2. Register")
+		fmt.Println("3. Exit")
+		fmt.Print("Enter your choice (1-3): ")
+
+		choice := c.readInput()
+		
+		switch choice {
+		case "1":
+			if c.login() {
+				c.showChatMenu()
+			}
+		case "2":
+			c.register()
+		case "3":
+			fmt.Println("👋 Goodbye!")
+			os.Exit(0)
+		default:
+			fmt.Println("❌ Invalid choice. Please try again.")
 		}
-		reqBody = bytes.NewBuffer(jsonData)
+	}
+}
+
+func (c *ChatClient) showChatMenu() {
+	for {
+		fmt.Println("\n💬 Chat Options:")
+		fmt.Println("1. Connect to WebSocket (Realtime)")
+		fmt.Println("2. Send HTTP Message (REST API)")
+		fmt.Println("3. View Chat History")
+		fmt.Println("4. Join Chat Room")
+		fmt.Println("5. Create Group")
+		fmt.Println("6. Logout")
+		fmt.Print("Enter your choice (1-6): ")
+
+		choice := c.readInput()
+		
+		switch choice {
+		case "1":
+			c.connectWebSocket()
+		case "2":
+			c.sendHTTPMessage()
+		case "3":
+			c.viewChatHistory()
+		case "4":
+			c.joinChatRoom()
+		case "5":
+			c.createGroup()
+		case "6":
+			c.logout()
+			return
+		default:
+			fmt.Println("❌ Invalid choice. Please try again.")
+		}
+	}
+}
+
+func (c *ChatClient) login() bool {
+	fmt.Print("📧 Email: ")
+	email := c.readInput()
+	
+	fmt.Print("🔒 Password: ")
+	password := c.readInput()
+
+	// Create login request
+	loginData := map[string]string{
+		"email":    email,
+		"password": password,
 	}
 
-	req, err := http.NewRequest(method, c.baseURL+endpoint, reqBody)
+	jsonData, _ := json.Marshal(loginData)
+	
+	// Send HTTP request
+	resp, err := http.Post("http://localhost:3001/api/auth/login", "application/json", strings.NewReader(string(jsonData)))
 	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	if c.token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.token)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
+		fmt.Printf("❌ Login failed: %v\n", err)
+		return false
 	}
 	defer resp.Body.Close()
 
-	var apiResp APIResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
-		return nil, err
+	var authResp AuthResponse
+	if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
+		fmt.Printf("❌ Failed to parse response: %v\n", err)
+		return false
 	}
 
-	return &apiResp, nil
+	if !authResp.Success {
+		fmt.Println("❌ Login failed: Invalid credentials")
+		return false
+	}
+
+	c.userID = authResp.Data.User.ID
+	c.username = authResp.Data.User.Username
+	c.token = authResp.Data.Token
+
+	fmt.Printf("✅ Login successful! Welcome, %s\n", c.username)
+	return true
 }
 
-func (c *ChatClient) register(username, email, password string) error {
-	body := map[string]string{
+func (c *ChatClient) register() {
+	fmt.Print("👤 Username: ")
+	username := c.readInput()
+	
+	fmt.Print("📧 Email: ")
+	email := c.readInput()
+	
+	fmt.Print("🔒 Password: ")
+	password := c.readInput()
+
+	// Create register request
+	registerData := map[string]string{
 		"username": username,
 		"email":    email,
 		"password": password,
 	}
 
-	resp, err := c.makeRequest("POST", "/api/auth/register", body)
+	jsonData, _ := json.Marshal(registerData)
+	
+	// Send HTTP request
+	resp, err := http.Post("http://localhost:3001/api/auth/register", "application/json", strings.NewReader(string(jsonData)))
 	if err != nil {
-		return err
+		fmt.Printf("❌ Registration failed: %v\n", err)
+		return
 	}
+	defer resp.Body.Close()
 
-	if !resp.Success {
-		return fmt.Errorf("registration failed: %s", resp.Error)
-	}
-
-	fmt.Println("✅ Registration successful!")
-	return nil
-}
-
-func (c *ChatClient) login(email, password string) error {
-	body := map[string]string{
-		"email":    email,
-		"password": password,
-	}
-
-	resp, err := c.makeRequest("POST", "/api/auth/login", body)
-	if err != nil {
-		return err
-	}
-
-	if !resp.Success {
-		return fmt.Errorf("login failed: %s", resp.Error)
-	}
-
-	// Parse auth response
-	authData, _ := json.Marshal(resp.Data)
 	var authResp AuthResponse
-	if err := json.Unmarshal(authData, &authResp); err != nil {
-		return err
+	if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
+		fmt.Printf("❌ Failed to parse response: %v\n", err)
+		return
 	}
 
-	c.token = authResp.Token
-	c.user = authResp.User
-
-	fmt.Printf("✅ Welcome, %s!\n", c.user.Username)
-	return nil
+	if authResp.Success {
+		fmt.Println("✅ Registration successful! Please login.")
+	} else {
+		fmt.Println("❌ Registration failed")
+	}
 }
 
-func (c *ChatClient) getChatRooms() ([]ChatRoom, error) {
-	resp, err := c.makeRequest("GET", "/api/chatrooms", nil)
-	if err != nil {
-		return nil, err
+func (c *ChatClient) connectWebSocket() {
+	if c.isConnected {
+		fmt.Println("⚠️ Already connected to WebSocket")
+		c.showRealtimeMenu()
+		return
 	}
 
-	if !resp.Success {
-		return nil, fmt.Errorf("failed to get chat rooms: %s", resp.Error)
-	}
-
-	// The response structure is: { "chatRooms": [...], "pagination": {...} }
-	type ChatRoomsResponse struct {
-		ChatRooms []ChatRoom `json:"chatRooms"`
-	}
-
-	var chatRoomsResp ChatRoomsResponse
-	roomData, _ := json.Marshal(resp.Data)
-	if err := json.Unmarshal(roomData, &chatRoomsResp); err != nil {
-		return nil, err
-	}
-
-	return chatRoomsResp.ChatRooms, nil
-}
-
-func (c *ChatClient) searchUserByUsername(username string) (string, error) {
-	resp, err := c.makeRequest("GET", "/api/users/search?q="+username, nil)
-	if err != nil {
-		return "", err
-	}
-
-	if !resp.Success {
-		return "", fmt.Errorf("failed to search user: %s", resp.Error)
-	}
-
-	// Parse search results
-	type SearchResult struct {
-		Users []User `json:"users"`
-	}
-
-	var searchResult SearchResult
-	userData, _ := json.Marshal(resp.Data)
-	if err := json.Unmarshal(userData, &searchResult); err != nil {
-		return "", err
-	}
-
-	// Find user with exact matching username
-	for _, user := range searchResult.Users {
-		if user.Username == username {
-			return user.ID, nil
-		}
-	}
-
-	return "", fmt.Errorf("user with username %s not found", username)
-}
-
-func (c *ChatClient) createChatRoom(name, roomType string, participantUsernames []string) (*ChatRoom, error) {
-	// Convert usernames to user IDs
-	var participantIds []string
-	for _, username := range participantUsernames {
-		if username == "" {
-			continue
-		}
-		userID, err := c.searchUserByUsername(username)
-		if err != nil {
-			return nil, fmt.Errorf("failed to find user %s: %v", username, err)
-		}
-		participantIds = append(participantIds, userID)
-	}
-
-	body := map[string]interface{}{
-		"name":           name,
-		"type":           roomType,
-		"participantIds": participantIds,
-	}
-
-	resp, err := c.makeRequest("POST", "/api/chatrooms", body)
-	if err != nil {
-		return nil, err
-	}
-
-	if !resp.Success {
-		return nil, fmt.Errorf("failed to create chat room: %s", resp.Error)
-	}
-
-	var room ChatRoom
-	roomData, _ := json.Marshal(resp.Data)
-	if err := json.Unmarshal(roomData, &room); err != nil {
-		return nil, err
-	}
-
-	return &room, nil
-}
-
-func (c *ChatClient) sendMessage(chatRoomID, content string) error {
-	body := map[string]string{
-		"chatRoomId": chatRoomID,
-		"content":    content,
-	}
-
-	resp, err := c.makeRequest("POST", "/api/messages", body)
-	if err != nil {
-		return err
-	}
-
-	if !resp.Success {
-		return fmt.Errorf("failed to send message: %s", resp.Error)
-	}
-
-	return nil
-}
-
-func (c *ChatClient) getMessages(chatRoomID string) ([]Message, error) {
-	resp, err := c.makeRequest("GET", "/api/messages/chatroom/"+chatRoomID, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	if !resp.Success {
-		return nil, fmt.Errorf("failed to get messages: %s", resp.Error)
-	}
-
-	// The response structure might be: { "messages": [...], "pagination": {...} }
-	type MessagesResponse struct {
-		Messages []Message `json:"messages"`
-	}
-
-	var messagesResp MessagesResponse
-	msgData, _ := json.Marshal(resp.Data)
-	if err := json.Unmarshal(msgData, &messagesResp); err != nil {
-		// Try direct unmarshaling if the structure is different
-		var messages []Message
-		if err2 := json.Unmarshal(msgData, &messages); err2 != nil {
-			return nil, fmt.Errorf("failed to parse messages: %v", err)
-		}
-		return messages, nil
-	}
-
-	return messagesResp.Messages, nil
-}
-
-func (c *ChatClient) connectWebSocket() error {
-	// The WebSocket server runs on the same port as HTTP server
-	wsURL := strings.Replace(c.baseURL, "http", "ws", 1)
+	// Connect to WebSocket
+	header := http.Header{}
+	header.Set("Authorization", "Bearer "+c.token)
 	
-	fmt.Printf("🔌 Connecting to WebSocket: %s\n", wsURL)
-	
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, _, err := websocket.DefaultDialer.Dial("ws://localhost:3001", header)
 	if err != nil {
-		return fmt.Errorf("WebSocket dial failed: %v", err)
+		fmt.Printf("❌ WebSocket connection failed: %v\n", err)
+		return
 	}
 
-	c.wsConn = conn
+	c.conn = conn
+	c.isConnected = true
 	
-	// Start listening for WebSocket messages first
-	go c.listenWebSocket()
+	fmt.Println("🔗 Connected to WebSocket server!")
 	
-	// Wait a moment for connection acknowledgment, then send auth
-	time.Sleep(100 * time.Millisecond)
-	
-	// Send authentication message after connection
-	authMsg := WSMessage{
+	// Send authentication message
+	authMsg := WebSocketMessage{
 		Type: "authenticate",
-		Data: map[string]string{
-			"token": c.token,
+		Data: map[string]interface{}{
+			"token":  c.token,
+			"userId": c.userID,
 		},
 	}
 	
-	fmt.Println("🔐 Sending authentication...")
-	if err := conn.WriteJSON(authMsg); err != nil {
-		conn.Close()
-		return fmt.Errorf("failed to send auth message: %v", err)
+	if err := c.conn.WriteJSON(authMsg); err != nil {
+		fmt.Printf("❌ Failed to authenticate: %v\n", err)
+		c.conn.Close()
+		c.isConnected = false
+		return
 	}
 	
-	return nil
-}
-
-func (c *ChatClient) listenWebSocket() {
-	defer c.wsConn.Close()
+	fmt.Println("🔐 Authentication sent...")
 	
-	for {
-		var msg WSMessage
-		err := c.wsConn.ReadJSON(&msg)
-		if err != nil {
-			log.Printf("WebSocket read error: %v", err)
-			return
-		}
-		
-		c.handleWebSocketMessage(msg)
-	}
+	// Start listening for messages
+	go c.listenForMessages()
+	
+	// Show realtime menu
+	c.showRealtimeMenu()
 }
 
-func (c *ChatClient) handleWebSocketMessage(msg WSMessage) {
-	switch msg.Type {
-	case "connection_ack":
-		fmt.Println("🔌 WebSocket connected, authenticating...")
-	case "auth_success":
-		fmt.Println("✅ WebSocket authenticated successfully!")
-	case "error":
-		if data, ok := msg.Data.(map[string]interface{}); ok {
-			if errMsg, exists := data["error"]; exists {
-				fmt.Printf("❌ WebSocket error: %v\n", errMsg)
-			}
-		}
-	case "new_message":
-		msgData, _ := json.Marshal(msg.Data)
-		var message Message
-		if err := json.Unmarshal(msgData, &message); err == nil {
-			if message.ChatRoomID == c.currentRoom && message.SenderID != c.user.ID {
-				fmt.Printf("\n💬 New message: %s\n> ", message.Content)
-			}
-		}
-	case "user_typing_start":
-		if c.currentRoom != "" {
-			fmt.Printf("\n⌨️  Someone is typing...\n> ")
-		}
-	case "user_typing_stop":
-		// Could clear typing indicator if needed
-	}
-}
+func (c *ChatClient) showRealtimeMenu() {
+	fmt.Println("\n⚡ Realtime Chat Mode")
+	fmt.Println("Commands:")
+	fmt.Println("  /send <message>     - Send message to current chat room")
+	fmt.Println("  /join <room_id>     - Join a chat room")
+	fmt.Println("  /typing             - Send typing indicator")
+	fmt.Println("  /status <message>   - Update status")
+	fmt.Println("  /disconnect         - Disconnect from WebSocket")
+	fmt.Println("  /help               - Show this help")
+	fmt.Println("\nType your commands or messages:")
 
-func (c *ChatClient) showMenu() {
-	fmt.Println("\n=== WhatsApp Chat Client ===")
-	fmt.Println("1. List chat rooms")
-	fmt.Println("2. Create new chat room")
-	fmt.Println("3. Join chat room")
-	fmt.Println("4. Send message")
-	fmt.Println("5. View messages")
-	fmt.Println("6. Exit")
-	fmt.Print("Choose option: ")
-}
+	// Setup signal handling for graceful shutdown
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
 
-func (c *ChatClient) run() {
+	// Read user input
 	scanner := bufio.NewScanner(os.Stdin)
-
-	// Authentication
+	
 	for {
-		fmt.Println("\n=== Authentication ===")
-		fmt.Println("1. Login")
-		fmt.Println("2. Register")
-		fmt.Print("Choose option: ")
-		
-		if !scanner.Scan() {
-			return
-		}
-		
-		choice := strings.TrimSpace(scanner.Text())
-		
-		switch choice {
-		case "1":
-			fmt.Print("Email: ")
-			scanner.Scan()
-			email := strings.TrimSpace(scanner.Text())
-			
-			fmt.Print("Password: ")
-			scanner.Scan()
-			password := strings.TrimSpace(scanner.Text())
-			
-			if err := c.login(email, password); err != nil {
-				fmt.Printf("❌ %v\n", err)
-				continue
-			}
-			goto mainMenu
-			
-		case "2":
-			fmt.Print("Username: ")
-			scanner.Scan()
-			username := strings.TrimSpace(scanner.Text())
-			
-			fmt.Print("Email: ")
-			scanner.Scan()
-			email := strings.TrimSpace(scanner.Text())
-			
-			fmt.Print("Password: ")
-			scanner.Scan()
-			password := strings.TrimSpace(scanner.Text())
-			
-			if err := c.register(username, email, password); err != nil {
-				fmt.Printf("❌ %v\n", err)
-				continue
-			}
-			
-		default:
-			fmt.Println("❌ Invalid option")
-		}
-	}
-
-mainMenu:
-	// Connect WebSocket
-	if err := c.connectWebSocket(); err != nil {
-		fmt.Printf("⚠️  WebSocket connection failed: %v\n", err)
-	} else {
-		fmt.Println("🔌 Connected to real-time chat!")
-	}
-
-	// Main menu loop
-	for {
-		c.showMenu()
-		
-		if !scanner.Scan() {
-			return
-		}
-		
-		choice := strings.TrimSpace(scanner.Text())
-		
-		switch choice {
-		case "1":
-			c.listChatRooms()
-		case "2":
-			c.createNewChatRoom(scanner)
-		case "3":
-			c.joinChatRoom(scanner)
-		case "4":
-			c.sendMessageInteractive(scanner)
-		case "5":
-			c.viewMessages()
-		case "6":
-			fmt.Println("👋 Goodbye!")
+		select {
+		case <-interrupt:
+			fmt.Println("\n🛑 Disconnecting...")
+			c.disconnect()
 			return
 		default:
-			fmt.Printf("❌ Invalid option: '%s'\n", choice)
-		}
-	}
-}
-
-func (c *ChatClient) listChatRooms() {
-	rooms, err := c.getChatRooms()
-	if err != nil {
-		fmt.Printf("❌ %v\n", err)
-		return
-	}
-
-	if len(rooms) == 0 {
-		fmt.Println("📭 No chat rooms found")
-		return
-	}
-
-	fmt.Println("\n📋 Your Chat Rooms:")
-	for i, room := range rooms {
-		roomName := room.Name
-		if roomName == "" {
-			// For direct chats, show the other participant's name
-			if room.Type == "direct" && len(room.Participants) >= 2 {
-				for _, p := range room.Participants {
-					if p.UserID != c.user.ID {
-						roomName = fmt.Sprintf("Chat with %s", p.User.Username)
-						break
-					}
+			if scanner.Scan() {
+				input := strings.TrimSpace(scanner.Text())
+				if input == "" {
+					continue
 				}
-			} else {
-				roomName = fmt.Sprintf("Room %s", room.ID[:8])
+				
+				if !c.handleRealtimeCommand(input) {
+					return // Exit realtime mode
+				}
 			}
 		}
+	}
+}
+
+func (c *ChatClient) handleRealtimeCommand(input string) bool {
+	if strings.HasPrefix(input, "/") {
+		parts := strings.SplitN(input, " ", 2)
+		command := parts[0]
 		
-		participantNames := []string{}
-		for _, p := range room.Participants {
-			if p.UserID != c.user.ID { // Don't include self
-				participantNames = append(participantNames, p.User.Username)
+		switch command {
+		case "/send":
+			if len(parts) < 2 {
+				fmt.Println("❌ Usage: /send <message>")
+				return true
 			}
+			c.sendRealtimeMessage(parts[1])
+			
+		case "/join":
+			if len(parts) < 2 {
+				fmt.Println("❌ Usage: /join <room_id>")
+				return true
+			}
+			c.joinRealtimeRoom(parts[1])
+			
+		case "/typing":
+			c.sendTypingIndicator()
+			
+		case "/status":
+			if len(parts) < 2 {
+				fmt.Println("❌ Usage: /status <message>")
+				return true
+			}
+			c.updateStatus(parts[1])
+			
+		case "/disconnect":
+			c.disconnect()
+			return false
+			
+		case "/help":
+			c.showRealtimeMenu()
+			
+		default:
+			fmt.Printf("❌ Unknown command: %s\n", command)
 		}
-		
-		participantStr := strings.Join(participantNames, ", ")
-		if len(participantNames) == 0 {
-			participantStr = "just you"
+	} else {
+		// Send as regular message if in a chat room
+		if c.chatRoomID != "" {
+			c.sendRealtimeMessage(input)
+		} else {
+			fmt.Println("⚠️ Join a chat room first using /join <room_id>")
 		}
-		
-		fmt.Printf("%d. %s (%s) - with %s\n", 
-			i+1, roomName, room.Type, participantStr)
 	}
+	
+	return true
 }
 
-func (c *ChatClient) createNewChatRoom(scanner *bufio.Scanner) {
-	fmt.Print("Room name (optional): ")
-	scanner.Scan()
-	name := strings.TrimSpace(scanner.Text())
-
-	fmt.Print("Room type (direct/group): ")
-	scanner.Scan()
-	roomType := strings.TrimSpace(scanner.Text())
-
-	if roomType != "direct" && roomType != "group" {
-		fmt.Println("❌ Invalid room type")
+func (c *ChatClient) sendRealtimeMessage(content string) {
+	if c.chatRoomID == "" {
+		fmt.Println("⚠️ Join a chat room first using /join <room_id>")
 		return
 	}
 
-	fmt.Print("Participant usernames (comma-separated): ")
-	scanner.Scan()
-	participantInput := strings.TrimSpace(scanner.Text())
-	
-	participants := []string{}
-	if participantInput != "" {
-		participants = strings.Split(participantInput, ",")
-		for i, p := range participants {
-			participants[i] = strings.TrimSpace(p)
-		}
+	message := WebSocketMessage{
+		Type: "message",
+		Data: map[string]interface{}{
+			"content":    content,
+			"chatRoomId": c.chatRoomID,
+			"senderId":   c.userID,
+		},
 	}
 
-	room, err := c.createChatRoom(name, roomType, participants)
-	if err != nil {
-		fmt.Printf("❌ %v\n", err)
+	if err := c.conn.WriteJSON(message); err != nil {
+		fmt.Printf("❌ Failed to send message: %v\n", err)
 		return
 	}
 
-	fmt.Printf("✅ Chat room created: %s (ID: %s)\n", room.Name, room.ID)
+	fmt.Printf("📤 [%s] You: %s\n", time.Now().Format("15:04"), content)
 }
 
-func (c *ChatClient) joinChatRoom(scanner *bufio.Scanner) {
-	rooms, err := c.getChatRooms()
-	if err != nil {
-		fmt.Printf("❌ %v\n", err)
-		return
-	}
-
-	if len(rooms) == 0 {
-		fmt.Println("📭 No chat rooms available")
-		return
-	}
-
-	c.listChatRooms()
-	fmt.Print("Enter room number to join: ")
-	scanner.Scan()
-	choice := strings.TrimSpace(scanner.Text())
-
-	roomIndex := 0
-	if _, err := fmt.Sscanf(choice, "%d", &roomIndex); err != nil || roomIndex < 1 || roomIndex > len(rooms) {
-		fmt.Println("❌ Invalid room number")
-		return
-	}
-
-	selectedRoom := rooms[roomIndex-1]
-	c.currentRoom = selectedRoom.ID
+func (c *ChatClient) joinRealtimeRoom(roomID string) {
+	c.chatRoomID = roomID
 	
-	roomName := selectedRoom.Name
-	if roomName == "" {
-		roomName = fmt.Sprintf("Room %s", selectedRoom.ID[:8])
+	message := WebSocketMessage{
+		Type: "join_room",
+		Data: map[string]interface{}{
+			"chatRoomId": roomID,
+			"userId":     c.userID,
+		},
 	}
-	
-	fmt.Printf("🏠 Joined room: %s\n", roomName)
-	fmt.Println("💡 You can now send messages using option 4")
+
+	if err := c.conn.WriteJSON(message); err != nil {
+		fmt.Printf("❌ Failed to join room: %v\n", err)
+		return
+	}
+
+	fmt.Printf("🏠 Joined chat room: %s\n", roomID)
 }
 
-func (c *ChatClient) sendMessageInteractive(scanner *bufio.Scanner) {
-	if c.currentRoom == "" {
-		fmt.Println("❌ Please join a chat room first")
+func (c *ChatClient) sendTypingIndicator() {
+	if c.chatRoomID == "" {
+		fmt.Println("⚠️ Join a chat room first")
 		return
 	}
 
-	fmt.Print("Enter message (or 'exit' to stop): ")
-	
+	message := WebSocketMessage{
+		Type: "typing_start",
+		Data: map[string]interface{}{
+			"chatRoomId": c.chatRoomID,
+			"userId":     c.userID,
+		},
+	}
+
+	if err := c.conn.WriteJSON(message); err != nil {
+		fmt.Printf("❌ Failed to send typing indicator: %v\n", err)
+		return
+	}
+
+	fmt.Println("⌨️ Typing indicator sent")
+}
+
+func (c *ChatClient) updateStatus(status string) {
+	message := WebSocketMessage{
+		Type: "status_update",
+		Data: map[string]interface{}{
+			"userId": c.userID,
+			"status": status,
+		},
+	}
+
+	if err := c.conn.WriteJSON(message); err != nil {
+		fmt.Printf("❌ Failed to update status: %v\n", err)
+		return
+	}
+
+	fmt.Printf("📊 Status updated: %s\n", status)
+}
+
+func (c *ChatClient) listenForMessages() {
+	defer func() {
+		c.conn.Close()
+		c.isConnected = false
+	}()
+
 	for {
-		scanner.Scan()
-		message := strings.TrimSpace(scanner.Text())
-		
-		if message == "exit" {
+		var wsMsg WebSocketMessage
+		err := c.conn.ReadJSON(&wsMsg)
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				fmt.Printf("❌ WebSocket error: %v\n", err)
+			}
 			break
 		}
-		
-		if message == "" {
-			fmt.Print("> ")
-			continue
-		}
 
-		if err := c.sendMessage(c.currentRoom, message); err != nil {
-			fmt.Printf("❌ Failed to send: %v\n", err)
+		c.handleWebSocketMessage(wsMsg)
+	}
+}
+
+func (c *ChatClient) handleWebSocketMessage(wsMsg WebSocketMessage) {
+	switch wsMsg.Type {
+	case "connection_ack":
+		fmt.Println("📨 Received: connection_ack")
+		
+	case "authenticated", "auth_success":
+		fmt.Println("✅ Authentication successful!")
+		
+	case "authentication_failed", "auth_failed":
+		fmt.Println("❌ Authentication failed!")
+		c.disconnect()
+		
+	case "room_joined":
+		if data, ok := wsMsg.Data.(map[string]interface{}); ok {
+			if roomId, roomOk := data["chatRoomId"].(string); roomOk {
+				fmt.Printf("✅ Successfully joined room: %s\n", roomId)
+			}
+		}
+		
+	case "message_sent":
+		// Message sent confirmation - already handled by local echo
+		
+	case "message":
+		if data, ok := wsMsg.Data.(map[string]interface{}); ok {
+			senderID, senderOk := data["senderId"].(string)
+			content, contentOk := data["content"].(string)
+			timestamp, timestampOk := data["timestamp"].(string)
+			
+			if senderOk && contentOk && timestampOk && senderID != c.userID {
+				fmt.Printf("📥 [%s] %s: %s\n", 
+					timestamp, 
+					c.getSenderName(senderID), 
+					content)
+			}
+		}
+		
+	case "typing_start":
+		if data, ok := wsMsg.Data.(map[string]interface{}); ok {
+			if userID, userOk := data["userId"].(string); userOk && userID != c.userID {
+				fmt.Printf("⌨️ %s is typing...\n", c.getSenderName(userID))
+			}
+		}
+		
+	case "user_status":
+		if data, ok := wsMsg.Data.(map[string]interface{}); ok {
+			if userID, userOk := data["userId"].(string); userOk {
+				if isOnline, onlineOk := data["isOnline"].(bool); onlineOk {
+					status := "offline"
+					if isOnline {
+						status = "online"
+					}
+					fmt.Printf("👤 %s is now %s\n", c.getSenderName(userID), status)
+				}
+			}
+		}
+		
+	case "notification":
+		if data, ok := wsMsg.Data.(map[string]interface{}); ok {
+			if title, titleOk := data["title"].(string); titleOk {
+				if content, contentOk := data["content"].(string); contentOk {
+					fmt.Printf("🔔 %s: %s\n", title, content)
+				}
+			}
+		}
+		
+	case "error":
+		if data, ok := wsMsg.Data.(map[string]interface{}); ok {
+			if message, msgOk := data["message"].(string); msgOk {
+				fmt.Printf("⚠️ Server error: %s\n", message)
+			} else {
+				fmt.Printf("⚠️ Server error (no details)\n")
+			}
 		} else {
-			fmt.Printf("✅ Sent: %s\n", message)
+			fmt.Printf("⚠️ Server error (unknown format)\n")
 		}
 		
-		fmt.Print("> ")
+	default:
+		fmt.Printf("📨 Received: %s\n", wsMsg.Type)
 	}
 }
 
-func (c *ChatClient) viewMessages() {
-	if c.currentRoom == "" {
-		fmt.Println("❌ Please join a chat room first")
-		return
-	}
+func (c *ChatClient) getSenderName(userID string) string {
+	// In a real app, you would maintain a user cache
+	// For now, just return the user ID
+	return fmt.Sprintf("User-%s", userID[:8])
+}
 
-	messages, err := c.getMessages(c.currentRoom)
-	if err != nil {
-		fmt.Printf("❌ %v\n", err)
-		return
-	}
-
-	if len(messages) == 0 {
-		fmt.Println("📭 No messages in this room")
-		return
-	}
-
-	fmt.Println("\n💬 Messages:")
-	for _, msg := range messages {
-		sender := "You"
-		if msg.SenderID != c.user.ID {
-			sender = msg.SenderID[:8] // Show first 8 chars of sender ID
+func (c *ChatClient) sendHTTPMessage() {
+	if c.chatRoomID == "" {
+		fmt.Print("🏠 Chat Room ID (or 'auto' for direct chat): ")
+		roomInput := c.readInput()
+		
+		if roomInput == "auto" {
+			// Create a direct chat room ID format
+			c.chatRoomID = fmt.Sprintf("direct_%s_%s", c.userID, "other_user")
+		} else {
+			c.chatRoomID = roomInput
 		}
-		fmt.Printf("[%s] %s: %s\n", 
-			msg.Timestamp.Format("15:04"), sender, msg.Content)
+	}
+	
+	fmt.Print("💬 Message: ")
+	content := c.readInput()
+
+	messageData := map[string]interface{}{
+		"content":    content,
+		"chatRoomId": c.chatRoomID,
+	}
+
+	jsonData, _ := json.Marshal(messageData)
+	
+	// Create HTTP request with authorization
+	req, err := http.NewRequest("POST", "http://localhost:3001/api/messages", strings.NewReader(string(jsonData)))
+	if err != nil {
+		fmt.Printf("❌ Failed to create request: %v\n", err)
+		return
+	}
+	
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("❌ Failed to send message: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 200 || resp.StatusCode == 201 {
+		fmt.Println("✅ Message sent successfully!")
+	} else {
+		fmt.Printf("❌ Failed to send message. Status: %d\n", resp.StatusCode)
 	}
 }
 
-func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: go run main.go <backend-url>")
-		fmt.Println("Example: go run main.go http://localhost:3001")
-		os.Exit(1)
+func (c *ChatClient) viewChatHistory() {
+	if c.chatRoomID == "" {
+		fmt.Print("🏠 Chat Room ID: ")
+		c.chatRoomID = c.readInput()
 	}
 
-	baseURL := os.Args[1]
-	client := NewChatClient(baseURL)
+	// Create HTTP request with authorization
+	req, err := http.NewRequest("GET", fmt.Sprintf("http://localhost:3001/api/messages?chatRoomId=%s", c.chatRoomID), nil)
+	if err != nil {
+		fmt.Printf("❌ Failed to create request: %v\n", err)
+		return
+	}
 	
-	fmt.Println("🚀 Starting WhatsApp Chat Client...")
-	fmt.Printf("🔗 Connecting to: %s\n", baseURL)
+	req.Header.Set("Authorization", "Bearer "+c.token)
 	
-	client.run()
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("❌ Failed to get chat history: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	var response struct {
+		Success bool      `json:"success"`
+		Data    []Message `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		fmt.Printf("❌ Failed to parse response: %v\n", err)
+		return
+	}
+
+	if !response.Success {
+		fmt.Println("❌ Failed to get chat history")
+		return
+	}
+
+	fmt.Printf("\n📜 Chat History for Room: %s\n", c.chatRoomID)
+	fmt.Println("================================")
+	
+	for _, msg := range response.Data {
+		timestamp := msg.Timestamp.Format("15:04")
+		senderName := c.getSenderName(msg.SenderID)
+		if msg.SenderID == c.userID {
+			senderName = "You"
+		}
+		fmt.Printf("[%s] %s: %s\n", timestamp, senderName, msg.Content)
+	}
+}
+
+func (c *ChatClient) joinChatRoom() {
+	fmt.Print("🏠 Enter Chat Room ID: ")
+	roomID := c.readInput()
+	c.chatRoomID = roomID
+	fmt.Printf("✅ Joined chat room: %s\n", roomID)
+}
+
+func (c *ChatClient) createGroup() {
+	fmt.Print("👥 Group Name: ")
+	groupName := c.readInput()
+	
+	fmt.Print("👤 Participant Emails (comma-separated): ")
+	participantsInput := c.readInput()
+	
+	participantEmails := strings.Split(participantsInput, ",")
+	for i, p := range participantEmails {
+		participantEmails[i] = strings.TrimSpace(p)
+	}
+
+	groupData := map[string]interface{}{
+		"name":         groupName,
+		"participants": participantEmails,
+		"type":         "group",
+	}
+
+	jsonData, _ := json.Marshal(groupData)
+	
+	// Create HTTP request with authorization
+	req, err := http.NewRequest("POST", "http://localhost:3001/api/chatrooms", strings.NewReader(string(jsonData)))
+	if err != nil {
+		fmt.Printf("❌ Failed to create request: %v\n", err)
+		return
+	}
+	
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("❌ Failed to create group: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	var response struct {
+		Success bool `json:"success"`
+		Data    struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		fmt.Printf("❌ Failed to parse response: %v\n", err)
+		return
+	}
+
+	if response.Success {
+		fmt.Printf("✅ Group '%s' created successfully!\n", groupName)
+		fmt.Printf("🆔 Group ID: %s\n", response.Data.ID)
+		c.chatRoomID = response.Data.ID
+	} else {
+		fmt.Printf("❌ Failed to create group. Status: %d\n", resp.StatusCode)
+	}
+}
+
+func (c *ChatClient) disconnect() {
+	if c.conn != nil {
+		c.conn.Close()
+	}
+	c.isConnected = false
+	fmt.Println("🔌 Disconnected from WebSocket")
+}
+
+func (c *ChatClient) logout() {
+	c.disconnect()
+	c.userID = ""
+	c.username = ""
+	c.token = ""
+	c.chatRoomID = ""
+	fmt.Println("👋 Logged out successfully!")
+}
+
+func (c *ChatClient) readInput() string {
+	reader := bufio.NewReader(os.Stdin)
+	input, _ := reader.ReadString('\n')
+	return strings.TrimSpace(input)
 }

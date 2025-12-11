@@ -1,136 +1,219 @@
 # WhatsApp Chat Client (Golang)
 
-Mini chat application ที่เขียนด้วย Golang สำหรับทดสอบ WhatsApp Chat System Backend
+A command-line chat client written in Go that connects to the WhatsApp-like chat system backend.
 
-## ฟีเจอร์
+## Features
 
-- 🔐 **Authentication**: ลงทะเบียนและเข้าสู่ระบบ
-- 💬 **Real-time Chat**: แชทแบบ real-time ผ่าน WebSocket
-- 🏠 **Chat Rooms**: สร้างและเข้าร่วมห้องแชท
-- 📱 **Console Interface**: ใช้งานผ่าน terminal/console
-- 🔄 **Live Updates**: รับข้อความใหม่แบบ real-time
+### 🔐 Authentication
+- User login and registration
+- JWT token-based authentication
+- Secure session management
 
-## การติดตั้ง
+### 💬 Chat Options
+1. **Realtime WebSocket Connection** - Live chat with instant messaging
+2. **HTTP REST API** - Send messages via HTTP requests
+3. **Chat History** - View previous messages
+4. **Room Management** - Join chat rooms and create groups
 
-1. **ติดตั้ง Go dependencies:**
+### ⚡ Realtime Features (WebSocket Mode)
+- **Live Messaging**: Send and receive messages instantly
+- **Typing Indicators**: See when others are typing
+- **User Status**: Real-time online/offline status updates
+- **Notifications**: Receive instant notifications
+- **Room Management**: Join/leave chat rooms dynamically
+
+### 🌐 HTTP Features (REST API Mode)
+- **Message Sending**: Send messages via HTTP POST
+- **Chat History**: Retrieve message history via HTTP GET
+- **Group Creation**: Create new group chats
+- **User Management**: Manage contacts and groups
+
+## Installation
+
+1. **Install Go** (version 1.21 or higher)
+
+2. **Clone and setup**:
+   ```bash
+   cd chat-client
+   go mod tidy
+   ```
+
+3. **Build the client**:
+   ```bash
+   go build -o chat-client main.go
+   ```
+
+## Usage
+
+### Start the Client
 ```bash
-cd chat-client
-go mod tidy
+./chat-client
 ```
 
-2. **เริ่มต้น Backend Server:**
-```bash
-cd ../backend
-npm start
+### Main Menu Options
 ```
-
-3. **รัน Chat Client:**
-```bash
-cd ../chat-client
-go run main.go http://localhost:3001
-```
-
-## การใช้งาน
-
-### 1. Authentication
-เมื่อเริ่มโปรแกรม คุณจะเห็นเมนู:
-```
-=== Authentication ===
+📋 Choose an option:
 1. Login
-2. Register
-Choose option: 
+2. Register  
+3. Exit
 ```
 
-**สำหรับผู้ใช้ใหม่:**
-- เลือก `2` เพื่อลงทะเบียน
-- กรอก username, email, password
-- **Password ต้องมี:** ตัวอักษร + ตัวเลข, อย่างน้อย 6 ตัว (เช่น `alice123`)
-
-**สำหรับผู้ใช้เดิม:**
-- เลือก `1` เพื่อเข้าสู่ระบบ
-- กรอก email, password
-
-### 2. Main Menu
-หลังจากเข้าสู่ระบบสำเร็จ:
+### Chat Menu Options (After Login)
 ```
-=== WhatsApp Chat Client ===
-1. List chat rooms
-2. Create new chat room
-3. Join chat room
-4. Send message
-5. View messages
-6. Exit
+💬 Chat Options:
+1. Connect to WebSocket (Realtime)    # ⚡ Live chat mode
+2. Send HTTP Message (REST API)       # 🌐 HTTP request mode
+3. View Chat History                  # 📜 Message history
+4. Join Chat Room                     # 🏠 Room management
+5. Create Group                       # 👥 Group creation
+6. Logout                            # 👋 Exit
 ```
 
-### 3. การสร้างห้องแชท
-- เลือก `2` เพื่อสร้างห้องแชทใหม่
-- กรอกชื่อห้อง (optional)
-- เลือกประเภท: `direct` หรือ `group`
-- กรอก email ของผู้เข้าร่วม (คั่นด้วย comma)
+## Realtime WebSocket Commands
 
-### 4. การเข้าร่วมห้องแชท
-- เลือก `3` เพื่อดูรายการห้องแชท
-- เลือกหมายเลขห้องที่ต้องการเข้าร่วม
-
-### 5. การส่งข้อความ
-- เลือก `4` เพื่อส่งข้อความ
-- พิมพ์ข้อความและกด Enter
-- พิมพ์ `exit` เพื่อหยุดส่งข้อความ
-
-### 6. การดูข้อความ
-- เลือก `5` เพื่อดูประวัติข้อความในห้องปัจจุบัน
-
-## ตัวอย่างการใช้งาน
+When connected to WebSocket (Option 1), use these commands:
 
 ```bash
-# Terminal 1: เริ่ม backend
-cd backend
-npm start
-
-# Terminal 2: รัน client คนที่ 1
-cd chat-client
-go run main.go http://localhost:3001
-
-# Terminal 3: รัน client คนที่ 2 (ทดสอบ real-time chat)
-cd chat-client
-go run main.go http://localhost:3001
+/send <message>     # Send message to current chat room
+/join <room_id>     # Join a specific chat room
+/typing             # Send typing indicator
+/status <message>   # Update your status
+/disconnect         # Disconnect from WebSocket
+/help               # Show command help
 ```
 
-## การทดสอบ Real-time Chat
+### Example WebSocket Session
+```bash
+🔗 Connected to WebSocket server!
 
-1. **เปิด 2 terminals**
-2. **รัน client ใน terminal แต่ละตัว**
-3. **ลงทะเบียนผู้ใช้ 2 คน**
-4. **สร้างห้องแชทและเชิญกัน**
-5. **ทดสอบส่งข้อความไปมา**
+⚡ Realtime Chat Mode
+/join room_123
+🏠 Joined chat room: room_123
 
-## API Endpoints ที่ใช้
+/send Hello everyone!
+📤 [14:30] You: Hello everyone!
 
-- `POST /api/auth/register` - ลงทะเบียน
-- `POST /api/auth/login` - เข้าสู่ระบบ
-- `GET /api/chatrooms` - ดูรายการห้องแชท
-- `POST /api/chatrooms` - สร้างห้องแชท
-- `POST /api/messages` - ส่งข้อความ
-- `GET /api/messages/:roomId` - ดูข้อความ
-- `WS /ws` - WebSocket connection
+📥 [14:31] Alice: Hi there!
+⌨️ Bob is typing...
+📥 [14:32] Bob: Welcome to the chat!
+```
+
+## Configuration
+
+### Backend URLs
+The client connects to:
+- **HTTP API**: `http://localhost:3001`
+- **WebSocket**: `ws://localhost:3001`
+
+### Authentication
+- Uses JWT tokens for API authentication
+- Tokens are automatically included in WebSocket and HTTP requests
+- Session persists until logout
+
+## Message Types
+
+### WebSocket Messages
+- `message` - Chat messages
+- `typing_start` - Typing indicators  
+- `user_status` - Online/offline status
+- `notification` - System notifications
+- `join_room` - Room join events
+
+### HTTP Endpoints
+- `POST /api/auth/login` - User login
+- `POST /api/auth/register` - User registration
+- `POST /api/messages` - Send message
+- `GET /api/messages?chatRoomId=<id>` - Get chat history
+- `POST /api/groups` - Create group
+
+## Example Usage Scenarios
+
+### 1. Quick Message (HTTP Mode)
+```bash
+# Login → Option 2 (HTTP) → Send message
+1. Login with credentials
+2. Choose "Send HTTP Message"
+3. Enter room ID and message
+4. Message sent via REST API
+```
+
+### 2. Live Chat (WebSocket Mode)  
+```bash
+# Login → Option 1 (WebSocket) → Live chat
+1. Login with credentials
+2. Choose "Connect to WebSocket"
+3. Use /join <room_id> to join room
+4. Type messages or use /send command
+5. Receive real-time messages from others
+```
+
+### 3. Group Management
+```bash
+# Create new group chat
+1. Login with credentials
+2. Choose "Create Group"
+3. Enter group name and participant IDs
+4. Group created and ready for messaging
+```
+
+## Error Handling
+
+- **Connection Errors**: Automatic retry suggestions
+- **Authentication Errors**: Clear error messages
+- **Invalid Commands**: Help text and usage examples
+- **Network Issues**: Graceful degradation to HTTP mode
+
+## Development
+
+### Dependencies
+- `github.com/gorilla/websocket` - WebSocket client library
+- Standard Go libraries for HTTP, JSON, and CLI
+
+### Building
+```bash
+go build -o chat-client main.go
+```
+
+### Cross-platform Build
+```bash
+# Windows
+GOOS=windows GOARCH=amd64 go build -o chat-client.exe main.go
+
+# macOS
+GOOS=darwin GOARCH=amd64 go build -o chat-client-mac main.go
+
+# Linux
+GOOS=linux GOARCH=amd64 go build -o chat-client-linux main.go
+```
 
 ## Troubleshooting
 
-**ปัญหา: Connection refused**
-- ตรวจสอบว่า backend server รันอยู่ที่ port 3001
-- ตรวจสอบ URL ที่ส่งให้ client
+### Connection Issues
+1. Ensure backend server is running on `localhost:3001`
+2. WebSocket server runs on the same port as HTTP server (`localhost:3001`)
+3. Check firewall settings
 
-**ปัญหา: WebSocket connection failed**
-- ตรวจสอบว่า backend รองรับ WebSocket
-- ตรวจสอบ authentication token
+### Authentication Issues
+1. Verify credentials are correct
+2. Check if user is registered
+3. Ensure backend database is accessible
 
-**ปัญหา: Authentication failed**
-- ตรวจสอบ email/password
-- ลองลงทะเบียนผู้ใช้ใหม่
+### WebSocket Issues
+1. Try HTTP mode as fallback
+2. Check network connectivity
+3. Verify WebSocket server is running
 
-## ข้อมูลเพิ่มเติม
+## Features Comparison
 
-- Client นี้เป็น minimal implementation สำหรับทดสอบ
-- รองรับ real-time messaging ผ่าน WebSocket
-- ใช้ REST API สำหรับ CRUD operations
-- Console-based UI เพื่อความง่ายในการทดสอบ
+| Feature | WebSocket Mode | HTTP Mode |
+|---------|---------------|-----------|
+| Real-time messaging | ✅ | ❌ |
+| Typing indicators | ✅ | ❌ |
+| Live status updates | ✅ | ❌ |
+| Message history | ✅ | ✅ |
+| Group creation | ✅ | ✅ |
+| Offline capability | ❌ | ✅ |
+| Battery usage | Higher | Lower |
+| Network usage | Persistent | On-demand |
+
+Choose **WebSocket mode** for live chat experiences and **HTTP mode** for simple messaging or when connectivity is limited.

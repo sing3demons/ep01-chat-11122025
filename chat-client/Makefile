@@ -1,67 +1,104 @@
 # WhatsApp Chat Client Makefile
 
-.PHONY: build run clean test deps help
+# Variables
+BINARY_NAME=chat-client
+MAIN_FILE=main.go
+BUILD_DIR=build
 
-# Default backend URL
-BACKEND_URL ?= http://localhost:3001
-
-# Build the application
-build:
-	@echo "🔨 Building chat client..."
-	go build -o chat-client main.go
-	@echo "✅ Build complete: ./chat-client"
-
-# Run the application
-run:
-	@echo "🚀 Starting chat client..."
-	go run main.go $(BACKEND_URL)
+# Default target
+.PHONY: all
+all: build
 
 # Install dependencies
+.PHONY: deps
 deps:
-	@echo "📦 Installing dependencies..."
 	go mod tidy
 	go mod download
 
+# Build the application
+.PHONY: build
+build: deps
+	go build -o $(BINARY_NAME) $(MAIN_FILE)
+
+# Build for multiple platforms
+.PHONY: build-all
+build-all: deps
+	mkdir -p $(BUILD_DIR)
+	
+	# Windows
+	GOOS=windows GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-windows.exe $(MAIN_FILE)
+	
+	# macOS
+	GOOS=darwin GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-macos $(MAIN_FILE)
+	GOOS=darwin GOARCH=arm64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-macos-arm64 $(MAIN_FILE)
+	
+	# Linux
+	GOOS=linux GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-linux $(MAIN_FILE)
+	GOOS=linux GOARCH=arm64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 $(MAIN_FILE)
+
+# Run the application
+.PHONY: run
+run: build
+	./$(BINARY_NAME)
+
+# Run with development server
+.PHONY: dev
+dev:
+	go run $(MAIN_FILE)
+
 # Clean build artifacts
+.PHONY: clean
 clean:
-	@echo "🧹 Cleaning..."
-	rm -f chat-client
-	go clean
+	rm -f $(BINARY_NAME)
+	rm -rf $(BUILD_DIR)
 
-# Test build
+# Test the application
+.PHONY: test
 test:
-	@echo "🧪 Testing build..."
-	go build -o /tmp/chat-client-test main.go
-	rm -f /tmp/chat-client-test
-	@echo "✅ Build test passed"
+	go test -v ./...
 
-# Check if backend is running
-check-backend:
-	@echo "🔍 Checking backend at $(BACKEND_URL)..."
-	@curl -s $(BACKEND_URL)/api/health > /dev/null && echo "✅ Backend is running" || echo "❌ Backend not responding"
+# Format code
+.PHONY: fmt
+fmt:
+	go fmt ./...
 
-# Start demo (requires 2 terminals)
-demo:
-	@echo "🎬 Demo Instructions:"
-	@echo "1. Start backend: cd ../backend && npm start"
-	@echo "2. Terminal 1: make run"
-	@echo "3. Terminal 2: make run"
-	@echo "4. Follow demo.md instructions"
+# Lint code
+.PHONY: lint
+lint:
+	golangci-lint run
 
-# Help
+# Install the binary
+.PHONY: install
+install: build
+	sudo cp $(BINARY_NAME) /usr/local/bin/
+
+# Uninstall the binary
+.PHONY: uninstall
+uninstall:
+	sudo rm -f /usr/local/bin/$(BINARY_NAME)
+
+# Show help
+.PHONY: help
 help:
-	@echo "WhatsApp Chat Client - Available Commands:"
+	@echo "Available targets:"
+	@echo "  build      - Build the chat client"
+	@echo "  build-all  - Build for all platforms"
+	@echo "  run        - Build and run the client"
+	@echo "  dev        - Run in development mode"
+	@echo "  deps       - Install dependencies"
+	@echo "  clean      - Clean build artifacts"
+	@echo "  test       - Run tests"
+	@echo "  fmt        - Format code"
+	@echo "  lint       - Lint code"
+	@echo "  install    - Install binary to /usr/local/bin"
+	@echo "  uninstall  - Remove binary from /usr/local/bin"
+	@echo "  help       - Show this help message"
+
+# Quick start for development
+.PHONY: quick-start
+quick-start:
+	@echo "🚀 Starting WhatsApp Chat Client..."
+	@echo "📋 Make sure the backend server is running on localhost:3001"
+	@echo "📡 Make sure the WebSocket server is running on localhost:3002"
 	@echo ""
-	@echo "  build         Build the chat client binary"
-	@echo "  run           Run the chat client (default: localhost:3001)"
-	@echo "  deps          Install Go dependencies"
-	@echo "  clean         Clean build artifacts"
-	@echo "  test          Test build process"
-	@echo "  check-backend Check if backend is running"
-	@echo "  demo          Show demo instructions"
-	@echo "  help          Show this help message"
-	@echo ""
-	@echo "Examples:"
-	@echo "  make run                                    # Use default backend"
-	@echo "  make run BACKEND_URL=http://localhost:3001  # Custom backend URL"
-	@echo "  make build && ./chat-client http://localhost:3001"
+	$(MAKE) run

@@ -31,6 +31,8 @@ export interface WebSocketMessage {
 export class WebSocketManager {
   private connections: Map<string, WebSocketConnection> = new Map();
   private userConnections: Map<string, Set<string>> = new Map(); // userId -> Set of connectionIds
+  private rooms: Map<string, Set<string>> = new Map(); // roomId -> Set of connectionIds
+  private userRooms: Map<string, string> = new Map(); // connectionId -> current roomId
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private readonly HEARTBEAT_INTERVAL = 30000; // 30 seconds
   private readonly CONNECTION_TIMEOUT = 60000; // 60 seconds
@@ -285,6 +287,19 @@ export class WebSocketManager {
       );
     }
 
+    // Remove from rooms
+    const currentRoom = this.userRooms.get(connectionId);
+    if (currentRoom) {
+      const roomConnections = this.rooms.get(currentRoom);
+      if (roomConnections) {
+        roomConnections.delete(connectionId);
+        if (roomConnections.size === 0) {
+          this.rooms.delete(currentRoom);
+        }
+      }
+      this.userRooms.delete(connectionId);
+    }
+
     // Remove from connections
     this.connections.delete(connectionId);
 
@@ -354,30 +369,56 @@ export class WebSocketManager {
       return;
     }
 
+    const { content, chatRoomId } = data.data || {};
+    
+    // Use current room if no chatRoomId provided
+    const targetRoomId = chatRoomId || this.userRooms.get(connectionId);
+    
+    if (!targetRoomId) {
+      this.sendError(connection.socket, 'No chat room specified. Use /join <room_id> first.');
+      return;
+    }
+
+    if (!content) {
+      this.sendError(connection.socket, 'Message content is required');
+      return;
+    }
+
     try {
-      // Import MessageService to handle message sending
-      const { MessageService } = await import('../message/message.service');
-      
-      const messageData = {
-        content: data.data?.content,
+      // Create message object
+      const message = {
+        id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        content,
         senderId: connection.userId,
-        chatRoomId: data.data?.chatRoomId
+        chatRoomId: targetRoomId,
+        timestamp: new Date().toISOString(),
+        status: 'sent'
       };
 
-      const result = await MessageService.sendMessage(messageData);
+      console.log(`Broadcasting message from ${connection.userId} to room ${targetRoomId}: ${content}`);
 
-      if (result.success) {
-        // Send acknowledgment with message data
-        this.sendMessage(connection.socket, {
-          type: 'message_sent',
-          data: result.data,
-          messageId: data.messageId,
-          timestamp: new Date().toISOString()
+      // Broadcast to all users in the room
+      const roomConnections = this.rooms.get(targetRoomId);
+      if (roomConnections) {
+        roomConnections.forEach(connId => {
+          const conn = this.connections.get(connId);
+          if (conn && conn.socket.readyState === 1) { // WebSocket.OPEN
+            this.sendMessage(conn.socket, {
+              type: 'message',
+              data: message,
+              timestamp: new Date().toISOString()
+            });
+          }
         });
-      } else {
-        // Send error response
-        this.sendError(connection.socket, result.error || 'Failed to send message', 'message_send');
       }
+
+      // Send acknowledgment to sender
+      this.sendMessage(connection.socket, {
+        type: 'message_sent',
+        data: { messageId: message.id },
+        timestamp: new Date().toISOString()
+      });
+
     } catch (error) {
       console.error(`Error handling chat message from ${connectionId}:`, error);
       this.sendError(connection.socket, 'Failed to process message');
@@ -424,8 +465,39 @@ export class WebSocketManager {
     const connection = this.connections.get(connectionId);
     if (!connection || !connection.isActive) return;
 
-    // This will be implemented when chat room service is integrated
-    console.log(`User ${connection.userId} joining room:`, roomData);
+    const { chatRoomId } = roomData || {};
+    if (!chatRoomId) {
+      this.sendError(connection.socket, 'Chat room ID is required');
+      return;
+    }
+
+    // Leave current room if any
+    const currentRoom = this.userRooms.get(connectionId);
+    if (currentRoom) {
+      const roomConnections = this.rooms.get(currentRoom);
+      if (roomConnections) {
+        roomConnections.delete(connectionId);
+        if (roomConnections.size === 0) {
+          this.rooms.delete(currentRoom);
+        }
+      }
+    }
+
+    // Join new room
+    if (!this.rooms.has(chatRoomId)) {
+      this.rooms.set(chatRoomId, new Set());
+    }
+    this.rooms.get(chatRoomId)!.add(connectionId);
+    this.userRooms.set(connectionId, chatRoomId);
+
+    console.log(`User ${connection.userId} joined room: ${chatRoomId}`);
+    
+    // Send confirmation
+    this.sendMessage(connection.socket, {
+      type: 'room_joined',
+      data: { chatRoomId },
+      timestamp: new Date().toISOString()
+    });
   }
 
   /**
