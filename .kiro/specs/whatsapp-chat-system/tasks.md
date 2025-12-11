@@ -77,19 +77,19 @@
   - Implement message search functionality
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 4.2_
 
-- [ ]* 8.1 Write property test for message delivery
+- [x]* 8.1 Write property test for message delivery
   - **Property 1: Message delivery consistency**
   - **Validates: Requirements 1.1, 1.2**
 
-- [ ]* 8.2 Write property test for message status lifecycle
+- [x]* 8.2 Write property test for message status lifecycle
   - **Property 2: Message status lifecycle**
   - **Validates: Requirements 1.4, 1.5**
 
-- [ ]* 8.3 Write property test for typing indicators
+- [x]* 8.3 Write property test for typing indicators
   - **Property 3: Typing indicator synchronization**
   - **Validates: Requirements 1.3**
 
-- [ ]* 8.4 Write property test for message search accuracy
+- [x]* 8.4 Write property test for message search accuracy
   - **Property 11: Message search accuracy**
   - **Validates: Requirements 4.2**
 
