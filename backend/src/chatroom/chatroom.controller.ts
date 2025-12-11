@@ -367,4 +367,123 @@ export class ChatRoomController {
       });
     }
   }
+
+  /**
+   * Hide chat room for user
+   * POST /chatrooms/:id/hide
+   */
+  static async hideChatRoom(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const currentUserId = req.user?.id;
+
+      if (!currentUserId) {
+        res.status(HTTP_STATUS.UNAUTHORIZED).json({
+          success: false,
+          error: 'User not authenticated'
+        });
+        return;
+      }
+
+      if (!id) {
+        res.status(HTTP_STATUS.BAD_REQUEST).json({
+          success: false,
+          error: 'Chat room ID is required'
+        });
+        return;
+      }
+
+      const result = await ChatRoomService.hideChatRoom(id, currentUserId);
+
+      if (result.success) {
+        res.status(HTTP_STATUS.OK).json(result);
+      } else {
+        res.status(HTTP_STATUS.BAD_REQUEST).json(result);
+      }
+    } catch (error) {
+      console.error('Hide chat room controller error:', error);
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        error: 'Internal server error'
+      });
+    }
+  }
+
+  /**
+   * Unhide chat room for user
+   * POST /chatrooms/:id/unhide
+   */
+  static async unhideChatRoom(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const currentUserId = req.user?.id;
+
+      if (!currentUserId) {
+        res.status(HTTP_STATUS.UNAUTHORIZED).json({
+          success: false,
+          error: 'User not authenticated'
+        });
+        return;
+      }
+
+      if (!id) {
+        res.status(HTTP_STATUS.BAD_REQUEST).json({
+          success: false,
+          error: 'Chat room ID is required'
+        });
+        return;
+      }
+
+      const result = await ChatRoomService.unhideChatRoom(id, currentUserId);
+
+      if (result.success) {
+        res.status(HTTP_STATUS.OK).json(result);
+      } else {
+        res.status(HTTP_STATUS.BAD_REQUEST).json(result);
+      }
+    } catch (error) {
+      console.error('Unhide chat room controller error:', error);
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        error: 'Internal server error'
+      });
+    }
+  }
+
+  /**
+   * Get user's hidden chat rooms
+   * GET /chatrooms/hidden
+   */
+  static async getUserHiddenChatRooms(req: Request, res: Response): Promise<void> {
+    try {
+      const currentUserId = req.user?.id;
+      const { limit, offset } = req.query;
+
+      if (!currentUserId) {
+        res.status(HTTP_STATUS.UNAUTHORIZED).json({
+          success: false,
+          error: 'User not authenticated'
+        });
+        return;
+      }
+
+      const result = await ChatRoomService.getUserHiddenChatRooms(
+        currentUserId,
+        limit ? parseInt(limit as string) : undefined,
+        offset ? parseInt(offset as string) : undefined
+      );
+
+      if (result.success) {
+        res.status(HTTP_STATUS.OK).json(result);
+      } else {
+        res.status(HTTP_STATUS.BAD_REQUEST).json(result);
+      }
+    } catch (error) {
+      console.error('Get user hidden chat rooms controller error:', error);
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        error: 'Internal server error'
+      });
+    }
+  }
 }

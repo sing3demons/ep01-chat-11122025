@@ -29,6 +29,7 @@ model User {
   contactOf        Contact[]                @relation("ContactOf")
   blockedUsers     BlockedUser[]            @relation("UserBlocked")
   blockedBy        BlockedUser[]            @relation("BlockedBy")
+  hiddenChatRooms  HiddenChatRoom[]
 
   @@map("users")
 }
@@ -46,6 +47,7 @@ model ChatRoom {
   messages     Message[]
   participants ChatRoomParticipant[]
   notifications Notification[]
+  hiddenBy     HiddenChatRoom[]
 
   @@map("chat_rooms")
 }
@@ -148,4 +150,17 @@ model BlockedUser {
 
   @@id([userId, blockedUserId])
   @@map("blocked_users")
+}
+
+model HiddenChatRoom {
+  userId     String   @map("user_id")
+  chatRoomId String   @map("chat_room_id")
+  hiddenAt   DateTime @default(now()) @map("hidden_at")
+
+  // Relations
+  user     User     @relation(fields: [userId], references: [id])
+  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id])
+
+  @@id([userId, chatRoomId])
+  @@map("hidden_chat_rooms")
 }

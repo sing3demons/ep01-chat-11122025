@@ -676,4 +676,137 @@ export class ChatRoomService {
       };
     }
   }
+
+  /**
+   * Hide chat room for user (soft delete from user's view)
+   * This implements chat deletion with proper isolation - removes chat from user's view
+   * while preserving it for other participants
+   */
+  static async hideChatRoom(chatRoomId: string, userId: string): Promise<ApiResponse> {
+    try {
+      // Validate chat room ID
+      if (!ValidationUtils.isValidUUID(chatRoomId)) {
+        return {
+          success: false,
+          error: 'Invalid chat room ID format'
+        };
+      }
+
+      // Check if user is participant
+      const isParticipant = await ChatRoomRepository.isUserParticipant(chatRoomId, userId);
+      if (!isParticipant) {
+        return {
+          success: false,
+          error: 'User is not a participant in this chat room'
+        };
+      }
+
+      // Hide chat room for user
+      await ChatRoomRepository.hideChatRoomForUser(chatRoomId, userId);
+
+      return {
+        success: true,
+        message: 'Chat hidden successfully'
+      };
+
+    } catch (error) {
+      console.error('Hide chat room error:', error);
+      return {
+        success: false,
+        error: 'Failed to hide chat room'
+      };
+    }
+  }
+
+  /**
+   * Unhide chat room for user
+   */
+  static async unhideChatRoom(chatRoomId: string, userId: string): Promise<ApiResponse> {
+    try {
+      // Validate chat room ID
+      if (!ValidationUtils.isValidUUID(chatRoomId)) {
+        return {
+          success: false,
+          error: 'Invalid chat room ID format'
+        };
+      }
+
+      // Check if user is participant
+      const isParticipant = await ChatRoomRepository.isUserParticipant(chatRoomId, userId);
+      if (!isParticipant) {
+        return {
+          success: false,
+          error: 'User is not a participant in this chat room'
+        };
+      }
+
+      // Unhide chat room for user
+      await ChatRoomRepository.unhideChatRoomForUser(chatRoomId, userId);
+
+      return {
+        success: true,
+        message: 'Chat unhidden successfully'
+      };
+
+    } catch (error) {
+      console.error('Unhide chat room error:', error);
+      return {
+        success: false,
+        error: 'Failed to unhide chat room'
+      };
+    }
+  }
+
+  /**
+   * Get user's hidden chat rooms
+   */
+  static async getUserHiddenChatRooms(
+    userId: string,
+    limit: number = 20,
+    offset: number = 0
+  ): Promise<ApiResponse> {
+    try {
+      // Validate pagination
+      if (limit < 1 || limit > 100) {
+        return {
+          success: false,
+          error: 'Limit must be between 1 and 100'
+        };
+      }
+
+      if (offset < 0) {
+        return {
+          success: false,
+          error: 'Offset must be non-negative'
+        };
+      }
+
+      // Get user's hidden chat rooms
+      const hiddenChatRooms = await ChatRoomRepository.getUserHiddenChatRooms(userId, limit, offset);
+
+      // Convert to API format
+      const apiChatRooms = hiddenChatRooms.map(chatRoom => 
+        ChatRoomConverter.toApiChatRoomWithDetails(chatRoom)
+      );
+
+      return {
+        success: true,
+        data: {
+          chatRooms: apiChatRooms,
+          pagination: {
+            limit,
+            offset,
+            hasMore: hiddenChatRooms.length === limit
+          }
+        }
+      };
+
+    } catch (error) {
+      console.error('Get user hidden chat rooms error:', error);
+      return {
+        success: false,
+        error: 'Failed to get hidden chat rooms'
+      };
+    }
+  }
 }

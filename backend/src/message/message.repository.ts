@@ -243,4 +243,19 @@ export class MessageRepository {
       }
     });
   }
+
+  /**
+   * Check if user is blocked by another user
+   */
+  static async isUserBlocked(userId: string, blockedUserId: string): Promise<boolean> {
+    const blocked = await prisma.blockedUser.findUnique({
+      where: {
+        userId_blockedUserId: {
+          userId,
+          blockedUserId
+        }
+      }
+    });
+    return !!blocked;
+  }
 }

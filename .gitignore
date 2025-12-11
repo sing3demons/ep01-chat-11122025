@@ -174,3 +174,5 @@ go.work.sum
 # .vscode/
 */postgres_chat_data
 */redis_data
+
+*/package-lock.json

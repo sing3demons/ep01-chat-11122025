@@ -146,7 +146,7 @@ export class ChatRoomRepository {
   }
 
   /**
-   * Get user's chat rooms
+   * Get user's chat rooms (excluding hidden ones)
    */
   static async getUserChatRooms(
     userId: string,
@@ -155,11 +155,22 @@ export class ChatRoomRepository {
   ): Promise<any[]> {
     return await prisma.chatRoom.findMany({
       where: {
-        participants: {
-          some: {
-            userId
+        AND: [
+          {
+            participants: {
+              some: {
+                userId
+              }
+            }
+          },
+          {
+            hiddenBy: {
+              none: {
+                userId
+              }
+            }
           }
-        }
+        ]
       },
       include: {
         participants: {
@@ -477,6 +488,140 @@ export class ChatRoomRepository {
         lastMessageAt: 'desc'
       },
       take: limit
+    });
+  }
+
+  /**
+   * Hide chat room for user
+   */
+  static async hideChatRoomForUser(chatRoomId: string, userId: string): Promise<void> {
+    await prisma.hiddenChatRoom.upsert({
+      where: {
+        userId_chatRoomId: {
+          userId,
+          chatRoomId
+        }
+      },
+      update: {
+        hiddenAt: new Date()
+      },
+      create: {
+        userId,
+        chatRoomId,
+        hiddenAt: new Date()
+      }
+    });
+  }
+
+  /**
+   * Unhide chat room for user
+   */
+  static async unhideChatRoomForUser(chatRoomId: string, userId: string): Promise<void> {
+    await prisma.hiddenChatRoom.delete({
+      where: {
+        userId_chatRoomId: {
+          userId,
+          chatRoomId
+        }
+      }
+    }).catch(() => {
+      // Ignore error if record doesn't exist
+    });
+  }
+
+  /**
+   * Check if chat room is hidden for user
+   */
+  static async isChatRoomHiddenForUser(chatRoomId: string, userId: string): Promise<boolean> {
+    const hidden = await prisma.hiddenChatRoom.findUnique({
+      where: {
+        userId_chatRoomId: {
+          userId,
+          chatRoomId
+        }
+      }
+    });
+    return !!hidden;
+  }
+
+  /**
+   * Get user's hidden chat rooms
+   */
+  static async getUserHiddenChatRooms(
+    userId: string,
+    limit: number = 20,
+    offset: number = 0
+  ): Promise<any[]> {
+    return await prisma.chatRoom.findMany({
+      where: {
+        AND: [
+          {
+            participants: {
+              some: {
+                userId
+              }
+            }
+          },
+          {
+            hiddenBy: {
+              some: {
+                userId
+              }
+            }
+          }
+        ]
+      },
+      include: {
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                email: true,
+                isOnline: true,
+                lastSeen: true,
+                createdAt: true,
+                passwordHash: true
+              }
+            }
+          }
+        },
+        _count: {
+          select: {
+            participants: true
+          }
+        },
+        messages: {
+          take: 1,
+          orderBy: {
+            createdAt: 'desc'
+          },
+          include: {
+            sender: {
+              select: {
+                id: true,
+                username: true,
+                email: true,
+                isOnline: true,
+                lastSeen: true,
+                createdAt: true,
+                passwordHash: true
+              }
+            }
+          }
+        },
+        hiddenBy: {
+          where: {
+            userId
+          }
+        }
+      },
+      orderBy: {
+        lastMessageAt: 'desc'
+      },
+      take: limit,
+      skip: offset
     });
   }
 }

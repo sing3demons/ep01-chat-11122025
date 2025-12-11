@@ -136,7 +136,7 @@
   - **Property 26: Notification settings enforcement**
   - **Validates: Requirements 6.5**
 
-- [ ] 11. Create chat management features
+- [x] 11. Create chat management features
   - Implement chat history management
   - Add chat deletion with proper isolation
   - Implement user blocking functionality

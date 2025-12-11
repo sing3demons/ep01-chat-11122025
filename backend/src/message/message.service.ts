@@ -39,6 +39,27 @@ export class MessageService {
         };
       }
 
+      // Check if sender is blocked by any participants (for direct chats)
+      const chatRoomInfo = await MessageRepository.getChatRoomById(data.chatRoomId);
+      if (chatRoomInfo?.type === 'direct') {
+        const participants = await MessageRepository.getChatRoomParticipants(data.chatRoomId);
+        const otherParticipant = participants.find(p => p.userId !== data.senderId);
+        
+        if (otherParticipant) {
+          // Check if sender is blocked by the other participant
+          const isBlocked = await MessageRepository.isUserBlocked(otherParticipant.userId, data.senderId);
+          // Check if sender has blocked the other participant
+          const hasBlocked = await MessageRepository.isUserBlocked(data.senderId, otherParticipant.userId);
+          
+          if (isBlocked || hasBlocked) {
+            return {
+              success: false,
+              error: 'Cannot send message to blocked user'
+            };
+          }
+        }
+      }
+
       // Create message
       const message = await MessageRepository.createMessage(validation.sanitizedData!);
 
@@ -52,10 +73,10 @@ export class MessageService {
       const apiMessage = MessageConverter.toApiMessageWithSender(messageWithSender);
 
       // Get chat room participants for real-time broadcasting
-      const participants = await MessageRepository.getChatRoomParticipants(data.chatRoomId);
+      const chatParticipants = await MessageRepository.getChatRoomParticipants(data.chatRoomId);
       
       // Get chat room info for notifications
-      const chatRoom = await MessageRepository.getChatRoomById(data.chatRoomId);
+      const chatRoom = chatRoomInfo;
       const senderInfo = await MessageRepository.getUserById(data.senderId);
       
       // Prepare recipient data for bulk notifications
@@ -64,7 +85,7 @@ export class MessageService {
       
       // Broadcast message to all participants except sender
       const wsService = WebSocketService.getInstance();
-      for (const participant of participants) {
+      for (const participant of chatParticipants) {
         if (participant.userId !== data.senderId) {
           recipientIds.push(participant.userId);
           
