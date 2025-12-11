@@ -35,3 +35,6 @@ const MockNotification = jest.fn(() => ({
 MockNotification.permission = 'granted';
 MockNotification.requestPermission = jest.fn(() => Promise.resolve('granted'));
 global.Notification = MockNotification;
+
+// Mock scrollIntoView
+Element.prototype.scrollIntoView = jest.fn();

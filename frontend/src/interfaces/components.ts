@@ -1,6 +1,6 @@
 // Component interface definitions
 
-import { Message, User, ChatRoom, Notification, NotificationSettings, TypingIndicator } from '../types';
+import { Message, User, ChatRoom, Notification, NotificationSettings, TypingIndicator } from '../types/index.ts 22-32-13-426';
 
 export interface ChatInterfaceProps {
   currentUser: User;
@@ -38,6 +38,9 @@ export interface GroupManagerProps {
   onAddMember: (chatRoomId: string, userId: string) => void;
   onRemoveMember: (chatRoomId: string, userId: string) => void;
   onUpdateRole: (chatRoomId: string, userId: string, role: 'admin' | 'member') => void;
+  onUpdateGroup: (chatRoomId: string, name: string) => void;
+  onLeaveGroup: (chatRoomId: string) => void;
+  onDeleteGroup: (chatRoomId: string) => void;
 }
 
 export interface NotificationManagerProps {

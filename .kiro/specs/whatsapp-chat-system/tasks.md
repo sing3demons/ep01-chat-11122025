@@ -188,7 +188,7 @@
   - Run all backend tests to ensure functionality
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 15. Create React frontend components
+- [x] 15. Create React frontend components
   - Set up React application with TypeScript
   - Create ChatInterface component for main chat view
   - Implement MessageList component for displaying messages
@@ -196,14 +196,14 @@
   - Build ContactList component with online status
   - _Requirements: 1.1, 1.2, 1.3, 3.4_
 
-- [ ] 16. Implement frontend WebSocket integration
+- [x] 16. Implement frontend WebSocket integration
   - Create WebSocket client connection management
   - Implement real-time message receiving and display
   - Add typing indicator display
   - Create connection status indicators
   - _Requirements: 1.1, 1.2, 1.3, 5.4_
 
-- [ ] 17. Create group management UI
+- [x] 17. Create group management UI
   - Implement GroupManager component
   - Add group creation and member management interface
   - Create admin controls for group settings

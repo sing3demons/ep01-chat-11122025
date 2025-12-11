@@ -1,0 +1,106 @@
+/* Connection status indicator styles */
+.connection-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  transition: all 0.3s ease;
+}
+
+.connection-status.connected {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.connection-status.connecting,
+.connection-status.reconnecting {
+  background-color: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeaa7;
+}
+
+.connection-status.disconnected {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-icon {
+  font-size: 12px;
+  animation: pulse 2s infinite;
+}
+
+.connection-status.connecting .status-icon,
+.connection-status.reconnecting .status-icon {
+  animation: spin 1s linear infinite;
+}
+
+.status-text {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.connection-warning {
+  margin-top: 4px;
+  text-align: center;
+}
+
+.connection-warning small {
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
+/* Animations */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Compact version for header */
+.connection-status.compact {
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  border-radius: 12px;
+  flex-direction: row;
+}
+
+.connection-status.compact .connection-warning {
+  display: none;
+}
+
+/* Floating status indicator */
+.connection-status.floating {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+/* Hide when connected and not showing details */
+.connection-status.hidden {
+  display: none;
+}

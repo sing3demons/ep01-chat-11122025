@@ -176,3 +176,5 @@ go.work.sum
 */redis_data
 
 */package-lock.json
+
+*/build
