@@ -11,7 +11,7 @@ services:
     volumes:
       - ./postgres_chat_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U chat_user_v2 -d chats_v2"]
+      test: ["CMD-SHELL", "pg_isready -U chat_user -d whatsapp_chat_db"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -20,7 +20,7 @@ services:
   # Redis
   redis:
     image: redis:7-alpine
-    container_name: redis
+    container_name: redis-be
     command: redis-server --requirepass redis123 --appendonly yes
     ports:
       - "6379:6379"

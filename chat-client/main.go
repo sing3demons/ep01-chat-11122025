@@ -43,13 +43,23 @@ type Message struct {
 	Status     string    `json:"status"`
 }
 
+type Participant struct {
+	ChatRoomID string `json:"chatRoomId"`
+	UserID     string `json:"userId"`
+	Role       string `json:"role"`
+	JoinedAt   time.Time `json:"joinedAt"`
+	User       User   `json:"user"`
+}
+
 type ChatRoom struct {
-	ID            string    `json:"id"`
-	Name          string    `json:"name,omitempty"`
-	Type          string    `json:"type"`
-	Participants  []string  `json:"participants"`
-	CreatedAt     time.Time `json:"createdAt"`
-	LastMessageAt time.Time `json:"lastMessageAt"`
+	ID               string        `json:"id"`
+	Name             string        `json:"name,omitempty"`
+	Type             string        `json:"type"`
+	CreatedBy        string        `json:"createdBy"`
+	Participants     []Participant `json:"participants"`
+	ParticipantCount int           `json:"participantCount"`
+	CreatedAt        time.Time     `json:"createdAt"`
+	LastMessageAt    time.Time     `json:"lastMessageAt"`
 }
 
 // WebSocket message types
@@ -169,20 +179,69 @@ func (c *ChatClient) getChatRooms() ([]ChatRoom, error) {
 		return nil, fmt.Errorf("failed to get chat rooms: %s", resp.Error)
 	}
 
-	var rooms []ChatRoom
+	// The response structure is: { "chatRooms": [...], "pagination": {...} }
+	type ChatRoomsResponse struct {
+		ChatRooms []ChatRoom `json:"chatRooms"`
+	}
+
+	var chatRoomsResp ChatRoomsResponse
 	roomData, _ := json.Marshal(resp.Data)
-	if err := json.Unmarshal(roomData, &rooms); err != nil {
+	if err := json.Unmarshal(roomData, &chatRoomsResp); err != nil {
 		return nil, err
 	}
 
-	return rooms, nil
+	return chatRoomsResp.ChatRooms, nil
 }
 
-func (c *ChatClient) createChatRoom(name, roomType string, participants []string) (*ChatRoom, error) {
+func (c *ChatClient) searchUserByUsername(username string) (string, error) {
+	resp, err := c.makeRequest("GET", "/api/users/search?q="+username, nil)
+	if err != nil {
+		return "", err
+	}
+
+	if !resp.Success {
+		return "", fmt.Errorf("failed to search user: %s", resp.Error)
+	}
+
+	// Parse search results
+	type SearchResult struct {
+		Users []User `json:"users"`
+	}
+
+	var searchResult SearchResult
+	userData, _ := json.Marshal(resp.Data)
+	if err := json.Unmarshal(userData, &searchResult); err != nil {
+		return "", err
+	}
+
+	// Find user with exact matching username
+	for _, user := range searchResult.Users {
+		if user.Username == username {
+			return user.ID, nil
+		}
+	}
+
+	return "", fmt.Errorf("user with username %s not found", username)
+}
+
+func (c *ChatClient) createChatRoom(name, roomType string, participantUsernames []string) (*ChatRoom, error) {
+	// Convert usernames to user IDs
+	var participantIds []string
+	for _, username := range participantUsernames {
+		if username == "" {
+			continue
+		}
+		userID, err := c.searchUserByUsername(username)
+		if err != nil {
+			return nil, fmt.Errorf("failed to find user %s: %v", username, err)
+		}
+		participantIds = append(participantIds, userID)
+	}
+
 	body := map[string]interface{}{
-		"name":         name,
-		"type":         roomType,
-		"participants": participants,
+		"name":           name,
+		"type":           roomType,
+		"participantIds": participantIds,
 	}
 
 	resp, err := c.makeRequest("POST", "/api/chatrooms", body)
@@ -222,7 +281,7 @@ func (c *ChatClient) sendMessage(chatRoomID, content string) error {
 }
 
 func (c *ChatClient) getMessages(chatRoomID string) ([]Message, error) {
-	resp, err := c.makeRequest("GET", "/api/messages/"+chatRoomID, nil)
+	resp, err := c.makeRequest("GET", "/api/messages/chatroom/"+chatRoomID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -231,27 +290,57 @@ func (c *ChatClient) getMessages(chatRoomID string) ([]Message, error) {
 		return nil, fmt.Errorf("failed to get messages: %s", resp.Error)
 	}
 
-	var messages []Message
-	msgData, _ := json.Marshal(resp.Data)
-	if err := json.Unmarshal(msgData, &messages); err != nil {
-		return nil, err
+	// The response structure might be: { "messages": [...], "pagination": {...} }
+	type MessagesResponse struct {
+		Messages []Message `json:"messages"`
 	}
 
-	return messages, nil
+	var messagesResp MessagesResponse
+	msgData, _ := json.Marshal(resp.Data)
+	if err := json.Unmarshal(msgData, &messagesResp); err != nil {
+		// Try direct unmarshaling if the structure is different
+		var messages []Message
+		if err2 := json.Unmarshal(msgData, &messages); err2 != nil {
+			return nil, fmt.Errorf("failed to parse messages: %v", err)
+		}
+		return messages, nil
+	}
+
+	return messagesResp.Messages, nil
 }
 
 func (c *ChatClient) connectWebSocket() error {
-	wsURL := strings.Replace(c.baseURL, "http", "ws", 1) + "/ws?token=" + c.token
+	// The WebSocket server runs on the same port as HTTP server
+	wsURL := strings.Replace(c.baseURL, "http", "ws", 1)
+	
+	fmt.Printf("🔌 Connecting to WebSocket: %s\n", wsURL)
 	
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("WebSocket dial failed: %v", err)
 	}
 
 	c.wsConn = conn
 	
-	// Start listening for WebSocket messages
+	// Start listening for WebSocket messages first
 	go c.listenWebSocket()
+	
+	// Wait a moment for connection acknowledgment, then send auth
+	time.Sleep(100 * time.Millisecond)
+	
+	// Send authentication message after connection
+	authMsg := WSMessage{
+		Type: "authenticate",
+		Data: map[string]string{
+			"token": c.token,
+		},
+	}
+	
+	fmt.Println("🔐 Sending authentication...")
+	if err := conn.WriteJSON(authMsg); err != nil {
+		conn.Close()
+		return fmt.Errorf("failed to send auth message: %v", err)
+	}
 	
 	return nil
 }
@@ -273,7 +362,17 @@ func (c *ChatClient) listenWebSocket() {
 
 func (c *ChatClient) handleWebSocketMessage(msg WSMessage) {
 	switch msg.Type {
-	case "message":
+	case "connection_ack":
+		fmt.Println("🔌 WebSocket connected, authenticating...")
+	case "auth_success":
+		fmt.Println("✅ WebSocket authenticated successfully!")
+	case "error":
+		if data, ok := msg.Data.(map[string]interface{}); ok {
+			if errMsg, exists := data["error"]; exists {
+				fmt.Printf("❌ WebSocket error: %v\n", errMsg)
+			}
+		}
+	case "new_message":
 		msgData, _ := json.Marshal(msg.Data)
 		var message Message
 		if err := json.Unmarshal(msgData, &message); err == nil {
@@ -281,10 +380,12 @@ func (c *ChatClient) handleWebSocketMessage(msg WSMessage) {
 				fmt.Printf("\n💬 New message: %s\n> ", message.Content)
 			}
 		}
-	case "typing":
+	case "user_typing_start":
 		if c.currentRoom != "" {
 			fmt.Printf("\n⌨️  Someone is typing...\n> ")
 		}
+	case "user_typing_stop":
+		// Could clear typing indicator if needed
 	}
 }
 
@@ -387,7 +488,7 @@ mainMenu:
 			fmt.Println("👋 Goodbye!")
 			return
 		default:
-			fmt.Println("❌ Invalid option")
+			fmt.Printf("❌ Invalid option: '%s'\n", choice)
 		}
 	}
 }
@@ -408,10 +509,33 @@ func (c *ChatClient) listChatRooms() {
 	for i, room := range rooms {
 		roomName := room.Name
 		if roomName == "" {
-			roomName = fmt.Sprintf("Room %s", room.ID[:8])
+			// For direct chats, show the other participant's name
+			if room.Type == "direct" && len(room.Participants) >= 2 {
+				for _, p := range room.Participants {
+					if p.UserID != c.user.ID {
+						roomName = fmt.Sprintf("Chat with %s", p.User.Username)
+						break
+					}
+				}
+			} else {
+				roomName = fmt.Sprintf("Room %s", room.ID[:8])
+			}
 		}
-		fmt.Printf("%d. %s (%s) - %d participants\n", 
-			i+1, roomName, room.Type, len(room.Participants))
+		
+		participantNames := []string{}
+		for _, p := range room.Participants {
+			if p.UserID != c.user.ID { // Don't include self
+				participantNames = append(participantNames, p.User.Username)
+			}
+		}
+		
+		participantStr := strings.Join(participantNames, ", ")
+		if len(participantNames) == 0 {
+			participantStr = "just you"
+		}
+		
+		fmt.Printf("%d. %s (%s) - with %s\n", 
+			i+1, roomName, room.Type, participantStr)
 	}
 }
 
@@ -429,7 +553,7 @@ func (c *ChatClient) createNewChatRoom(scanner *bufio.Scanner) {
 		return
 	}
 
-	fmt.Print("Participant emails (comma-separated): ")
+	fmt.Print("Participant usernames (comma-separated): ")
 	scanner.Scan()
 	participantInput := strings.TrimSpace(scanner.Text())
 	

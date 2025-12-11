@@ -174,7 +174,7 @@
   - **Property 18: Message retry mechanism**
   - **Validates: Requirements 5.5**
 
-- [-] 13. Create API routes and endpoints
+- [x] 13. Create API routes and endpoints
   - Implement authentication routes (login, register, logout)
   - Create user management routes (profile, contacts, status)
   - Add message and chat room routes
@@ -182,7 +182,7 @@
   - Create group management routes
   - _Requirements: All backend requirements_
 
-- [ ] 14. Checkpoint - Backend API completion
+- [x] 14. Checkpoint - Backend API completion
   - Ensure all backend services are implemented and integrated
   - Verify all API endpoints are working correctly
   - Run all backend tests to ensure functionality
