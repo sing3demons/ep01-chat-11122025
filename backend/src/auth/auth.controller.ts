@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { HTTP_STATUS } from '../config/constants';
 
@@ -7,11 +7,13 @@ import { HTTP_STATUS } from '../config/constants';
  * Handles HTTP requests and responses for authentication
  */
 export class AuthController {
+  constructor(private readonly authService: AuthService) { }
   /**
    * Register a new user
    * POST /auth/register
    */
-  static async register(req: Request, res: Response): Promise<void> {
+  register = async (req: Request, res: Response): Promise<void> => {
+
     try {
       const { username, email, password } = req.body;
 
@@ -23,7 +25,7 @@ export class AuthController {
         return;
       }
 
-      const result = await AuthService.register({ username, email, password });
+      const result = await this.authService.register({ username, email, password });
 
       if (result.success) {
         res.status(HTTP_STATUS.CREATED).json(result);
@@ -43,7 +45,7 @@ export class AuthController {
    * Login user
    * POST /auth/login
    */
-  static async login(req: Request, res: Response): Promise<void> {
+  login = async (req: Request, res: Response): Promise<void> => {
     try {
       const { email, password } = req.body;
 
@@ -55,7 +57,7 @@ export class AuthController {
         return;
       }
 
-      const result = await AuthService.login({ email, password });
+      const result = await this.authService.login({ email, password });
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -75,7 +77,7 @@ export class AuthController {
    * Logout user
    * POST /auth/logout
    */
-  static async logout(req: Request, res: Response): Promise<void> {
+  logout = async (req: Request, res: Response): Promise<void> => {
     try {
       if (!req.user) {
         res.status(HTTP_STATUS.UNAUTHORIZED).json({
@@ -85,7 +87,7 @@ export class AuthController {
         return;
       }
 
-      const result = await AuthService.logout(req.user.id);
+      const result = await this.authService.logout(req.user.id);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -105,7 +107,7 @@ export class AuthController {
    * Get current user info
    * GET /auth/me
    */
-  static async getCurrentUser(req: Request, res: Response): Promise<void> {
+  getCurrentUser = async (req: Request, res: Response): Promise<void> => {
     try {
       if (!req.user) {
         res.status(HTTP_STATUS.UNAUTHORIZED).json({
@@ -115,7 +117,7 @@ export class AuthController {
         return;
       }
 
-      const result = await AuthService.getSessionInfo(req.user.id);
+      const result = await this.authService.getSessionInfo(req.user.id);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -135,7 +137,7 @@ export class AuthController {
    * Refresh JWT token
    * POST /auth/refresh
    */
-  static async refreshToken(req: Request, res: Response): Promise<void> {
+  refreshToken = async (req: Request, res: Response): Promise<void> => {
     try {
       const token = req.headers.authorization?.split(' ')[1];
 
@@ -147,7 +149,7 @@ export class AuthController {
         return;
       }
 
-      const result = await AuthService.refreshToken(token);
+      const result = await this.authService.refreshToken(token);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);
@@ -167,7 +169,7 @@ export class AuthController {
    * Change password for authenticated user
    * POST /auth/change-password
    */
-  static async changePassword(req: Request, res: Response): Promise<void> {
+  changePassword = async (req: Request, res: Response): Promise<void> => {
     try {
       if (!req.user) {
         res.status(HTTP_STATUS.UNAUTHORIZED).json({
@@ -187,7 +189,7 @@ export class AuthController {
         return;
       }
 
-      const result = await AuthService.changePassword(req.user.id, currentPassword, newPassword);
+      const result = await this.authService.changePassword(req.user.id, currentPassword, newPassword);
 
       if (result.success) {
         res.status(HTTP_STATUS.OK).json(result);

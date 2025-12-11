@@ -1,5 +1,6 @@
-import { User, NotificationSettings, PrivacySettings } from '@prisma/client';
+import { User, NotificationSettings, PrivacySettings, PrismaClient } from '@prisma/client';
 import prisma from '../config/database';
+import { DefaultArgs } from '@prisma/client/runtime/library';
 
 export interface CreateUserData {
   username: string;
@@ -13,16 +14,34 @@ export interface UpdateUserData {
   passwordHash?: string;
 }
 
+export interface IAuthRepository {
+  createUser(data: CreateUserData): Promise<User>;
+  findUserById(id: string): Promise<User | null>;
+  findUserByEmail(email: string): Promise<User | null>;
+  findUserByUsername(username: string): Promise<User | null>;
+  findUserByEmailOrUsername(email: string, username: string): Promise<User | null>;
+  updateUser(id: string, data: UpdateUserData): Promise<User>;
+  updateUserOnlineStatus(id: string, isOnline: boolean): Promise<User>;
+  createNotificationSettings(userId: string): Promise<NotificationSettings>;
+  createPrivacySettings(userId: string): Promise<PrivacySettings>;
+  getNotificationSettings(userId: string): Promise<NotificationSettings | null>;
+  getPrivacySettings(userId: string): Promise<PrivacySettings | null>;
+}
+
 /**
  * Auth Repository
  * Handles all database operations related to authentication
  */
-export class AuthRepository {
+export class AuthRepository implements IAuthRepository {
+  constructor(private readonly prismaInstance: PrismaClient<{
+    log: ("info" | "query" | "warn" | "error")[];
+    errorFormat: "pretty";
+  }, never, DefaultArgs> = prisma) {}
   /**
    * Create a new user
    */
-  static async createUser(data: CreateUserData): Promise<User> {
-    return await prisma.user.create({
+  async createUser(data: CreateUserData): Promise<User> {
+    return await this.prismaInstance.user.create({
       data: {
         username: data.username,
         email: data.email,
@@ -36,8 +55,8 @@ export class AuthRepository {
   /**
    * Find user by ID
    */
-  static async findUserById(id: string): Promise<User | null> {
-    return await prisma.user.findUnique({
+  async findUserById(id: string): Promise<User | null> {
+    return await this.prismaInstance.user.findUnique({
       where: { id }
     });
   }
@@ -45,8 +64,8 @@ export class AuthRepository {
   /**
    * Find user by email
    */
-  static async findUserByEmail(email: string): Promise<User | null> {
-    return await prisma.user.findUnique({
+  async findUserByEmail(email: string): Promise<User | null> {
+    return await this.prismaInstance.user.findUnique({
       where: { email }
     });
   }
@@ -54,8 +73,8 @@ export class AuthRepository {
   /**
    * Find user by username
    */
-  static async findUserByUsername(username: string): Promise<User | null> {
-    return await prisma.user.findUnique({
+  async findUserByUsername(username: string): Promise<User | null> {
+    return await this.prismaInstance.user.findUnique({
       where: { username }
     });
   }
@@ -63,8 +82,8 @@ export class AuthRepository {
   /**
    * Find user by email or username
    */
-  static async findUserByEmailOrUsername(email: string, username: string): Promise<User | null> {
-    return await prisma.user.findFirst({
+  async findUserByEmailOrUsername(email: string, username: string): Promise<User | null> {
+    return await this.prismaInstance.user.findFirst({
       where: {
         OR: [
           { email },
@@ -77,8 +96,8 @@ export class AuthRepository {
   /**
    * Update user by ID
    */
-  static async updateUser(id: string, data: UpdateUserData): Promise<User> {
-    return await prisma.user.update({
+  async updateUser(id: string, data: UpdateUserData): Promise<User> {
+    return await this.prismaInstance.user.update({
       where: { id },
       data
     });
@@ -87,8 +106,8 @@ export class AuthRepository {
   /**
    * Update user online status
    */
-  static async updateUserOnlineStatus(id: string, isOnline: boolean): Promise<User> {
-    return await prisma.user.update({
+  async updateUserOnlineStatus(id: string, isOnline: boolean): Promise<User> {
+    return await this.prismaInstance.user.update({
       where: { id },
       data: {
         isOnline,
@@ -100,8 +119,8 @@ export class AuthRepository {
   /**
    * Create default notification settings for user
    */
-  static async createNotificationSettings(userId: string): Promise<NotificationSettings> {
-    return await prisma.notificationSettings.create({
+  async createNotificationSettings(userId: string): Promise<NotificationSettings> {
+    return await this.prismaInstance.notificationSettings.create({
       data: {
         userId,
         soundEnabled: true,
@@ -115,8 +134,8 @@ export class AuthRepository {
   /**
    * Create default privacy settings for user
    */
-  static async createPrivacySettings(userId: string): Promise<PrivacySettings> {
-    return await prisma.privacySettings.create({
+  async createPrivacySettings(userId: string): Promise<PrivacySettings> {
+    return await this.prismaInstance.privacySettings.create({
       data: {
         userId,
         showOnlineStatus: true,
@@ -129,8 +148,8 @@ export class AuthRepository {
   /**
    * Get notification settings by user ID
    */
-  static async getNotificationSettings(userId: string): Promise<NotificationSettings | null> {
-    return await prisma.notificationSettings.findUnique({
+  async getNotificationSettings(userId: string): Promise<NotificationSettings | null> {
+    return await this.prismaInstance.notificationSettings.findUnique({
       where: { userId }
     });
   }
@@ -138,8 +157,8 @@ export class AuthRepository {
   /**
    * Get privacy settings by user ID
    */
-  static async getPrivacySettings(userId: string): Promise<PrivacySettings | null> {
-    return await prisma.privacySettings.findUnique({
+  async getPrivacySettings(userId: string): Promise<PrivacySettings | null> {
+    return await this.prismaInstance.privacySettings.findUnique({
       where: { userId }
     });
   }

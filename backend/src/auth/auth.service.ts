@@ -3,7 +3,7 @@ import { PasswordUtils } from '../utils/password';
 import { ValidationUtils } from '../utils/validation';
 import { User } from '../user';
 import { ApiResponse } from '../types';
-import { AuthRepository } from './auth.repository';
+import { AuthRepository, IAuthRepository } from './auth.repository';
 
 export interface RegisterRequest {
   username: string;
@@ -26,10 +26,11 @@ export interface AuthResponse {
  * Handles business logic for authentication operations
  */
 export class AuthService {
+  constructor(private readonly authRepository: IAuthRepository) { }
   /**
    * Register a new user
    */
-  static async register(data: RegisterRequest): Promise<ApiResponse> {
+  async register(data: RegisterRequest): Promise<ApiResponse> {
     try {
       // Validate input data
       const validation = ValidationUtils.validateRegistration(data);
@@ -41,13 +42,13 @@ export class AuthService {
       }
 
       // Check if user already exists
-      const existingUser = await AuthRepository.findUserByEmailOrUsername(data.email, data.username);
+      const existingUser = await this.authRepository.findUserByEmailOrUsername(data.email, data.username);
 
       if (existingUser) {
         return {
           success: false,
-          error: existingUser.email === data.email 
-            ? 'Email already registered' 
+          error: existingUser.email === data.email
+            ? 'Email already registered'
             : 'Username already taken'
         };
       }
@@ -65,7 +66,7 @@ export class AuthService {
       const passwordHash = await PasswordUtils.hashPassword(data.password);
 
       // Create user
-      const user = await AuthRepository.createUser({
+      const user = await this.authRepository.createUser({
         username: data.username,
         email: data.email,
         passwordHash
@@ -73,8 +74,8 @@ export class AuthService {
 
       // Create default settings
       await Promise.all([
-        AuthRepository.createNotificationSettings(user.id),
-        AuthRepository.createPrivacySettings(user.id)
+        this.authRepository.createNotificationSettings(user.id),
+        this.authRepository.createPrivacySettings(user.id)
       ]);
 
       // Generate JWT token
@@ -114,7 +115,7 @@ export class AuthService {
   /**
    * Login user
    */
-  static async login(data: LoginRequest): Promise<ApiResponse> {
+  async login(data: LoginRequest): Promise<ApiResponse> {
     try {
       // Validate input
       if (!data.email || !data.password) {
@@ -125,7 +126,7 @@ export class AuthService {
       }
 
       // Find user by email
-      const user = await AuthRepository.findUserByEmail(data.email);
+      const user = await this.authRepository.findUserByEmail(data.email);
 
       if (!user) {
         return {
@@ -144,7 +145,7 @@ export class AuthService {
       }
 
       // Update user online status
-      await AuthRepository.updateUserOnlineStatus(user.id, true);
+      await this.authRepository.updateUserOnlineStatus(user.id, true);
 
       // Generate JWT token
       const token = JWTUtils.generateToken({
@@ -183,10 +184,10 @@ export class AuthService {
   /**
    * Logout user
    */
-  static async logout(userId: string): Promise<ApiResponse> {
+  async logout(userId: string): Promise<ApiResponse> {
     try {
       // Update user offline status
-      await AuthRepository.updateUserOnlineStatus(userId, false);
+      await this.authRepository.updateUserOnlineStatus(userId, false);
 
       return {
         success: true,
@@ -209,9 +210,9 @@ export class AuthService {
     try {
       // Verify token
       const decoded = JWTUtils.verifyToken(token);
-
+      const authRepository = new AuthRepository();
       // Get user from database
-      const user = await AuthRepository.findUserById(decoded.userId);
+      const user = await authRepository.findUserById(decoded.userId);
 
       if (!user) {
         return {
@@ -245,13 +246,13 @@ export class AuthService {
   /**
    * Refresh JWT token
    */
-  static async refreshToken(token: string): Promise<ApiResponse> {
+  async refreshToken(token: string): Promise<ApiResponse> {
     try {
       // Verify current token
       const decoded = JWTUtils.verifyToken(token);
 
       // Get user from database
-      const user = await AuthRepository.findUserById(decoded.userId);
+      const user = await this.authRepository.findUserById(decoded.userId);
 
       if (!user) {
         return {
@@ -284,10 +285,10 @@ export class AuthService {
   /**
    * Change password (for authenticated users)
    */
-  static async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<ApiResponse> {
+  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<ApiResponse> {
     try {
       // Get user
-      const user = await AuthRepository.findUserById(userId);
+      const user = await this.authRepository.findUserById(userId);
 
       if (!user) {
         return {
@@ -318,7 +319,7 @@ export class AuthService {
       const passwordHash = await PasswordUtils.hashPassword(newPassword);
 
       // Update password
-      await AuthRepository.updateUser(userId, { passwordHash });
+      await this.authRepository.updateUser(userId, { passwordHash });
 
       return {
         success: true,
@@ -337,9 +338,9 @@ export class AuthService {
   /**
    * Get user session info
    */
-  static async getSessionInfo(userId: string): Promise<ApiResponse> {
+  async getSessionInfo(userId: string): Promise<ApiResponse> {
     try {
-      const user = await AuthRepository.findUserById(userId);
+      const user = await this.authRepository.findUserById(userId);
 
       if (!user) {
         return {
@@ -350,8 +351,8 @@ export class AuthService {
 
       // Get settings
       const [notificationSettings, privacySettings] = await Promise.all([
-        AuthRepository.getNotificationSettings(userId),
-        AuthRepository.getPrivacySettings(userId)
+        this.authRepository.getNotificationSettings(userId),
+        this.authRepository.getPrivacySettings(userId)
       ]);
 
       const userResponse = {
