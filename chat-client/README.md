@@ -1,46 +1,45 @@
-# 🚀 WhatsApp Chat Client (Golang) - Complete Guide
+# 🚀 WhatsApp Chat Client (Go)
 
-A command-line chat client written in Go that provides **Choose Options** for real-time communication with WebSocket and HTTP REST API modes.
+A command-line chat client built in Go that connects to the Go backend WhatsApp-style chat system.
 
 ## ✨ **Key Features**
 
 ### 🎯 **Dual Communication Modes**
-- **Option 1: WebSocket Realtime** ⚡ - Live chat with instant messaging
-- **Option 2: HTTP REST API** 🌐 - Reliable messaging for poor connectivity
+- **WebSocket Realtime** ⚡ - Live chat with instant messaging
+- **HTTP REST API** 🌐 - Reliable messaging via REST endpoints
 
 ### 🔐 **Authentication & Security**
 - JWT token-based authentication
-- Secure session management
+- Secure WebSocket connections with token validation
 - User registration and login
 
 ### 💬 **Real-time Features**
 - Instant messaging between users
 - Typing indicators
-- User online/offline status
-- Room management (join/leave)
+- Room management (join/leave/create)
 - Group chat creation
+- Message history retrieval
 
 ## 🛠️ **Installation & Setup**
 
 ### **Prerequisites**
 - Go 1.21 or higher
-- Backend server running on `localhost:3001`
-- PostgreSQL database (via Docker)
+- Go backend server running on `localhost:8080`
+- PostgreSQL and Redis (via Docker)
 
 ### **Quick Setup**
 ```bash
-# 1. Clone and build
-cd chat-client
-go mod tidy
-go build -o chat-client main.go
+# 1. Start the Go backend
+cd backend-go
+make run
 
-# 2. Start backend (separate terminal)
-cd ../backend
-docker-compose up -d  # Start database
-npm run dev          # Start backend server
+# 2. Run integration tests
+cd ../chat-client
+chmod +x test-integration.sh
+./test-integration.sh
 
-# 3. Run chat client
-./chat-client
+# 3. Start chat client
+go run main.go
 ```
 
 ## 🎮 **Usage Guide**
@@ -57,14 +56,15 @@ npm run dev          # Start backend server
 ```
 💬 Chat Options:
 1. Connect to WebSocket (Realtime)    # ⚡ Live chat mode
-2. Send HTTP Message (REST API)       # 🌐 Simple messaging
+2. Send HTTP Message (REST API)       # 🌐 REST messaging
 3. View Chat History                  # 📜 Message history
-4. Join Chat Room                     # 🏠 Room management
-5. Create Group                       # 👥 Group creation
-6. Logout                            # 👋 End session
+4. List Chat Rooms                    # 🔍 Available rooms
+5. Join Chat Room                     # 🏠 Room management
+6. Create Group                       # 👥 Group creation
+7. Logout                            # 👋 End session
 ```
 
-## ⚡ **WebSocket Realtime Mode (Option 1)**
+## ⚡ **WebSocket Realtime Mode**
 
 ### **Commands**
 ```bash
@@ -78,55 +78,45 @@ npm run dev          # Start backend server
 
 ### **Example Session**
 ```bash
-./chat-client
-# Login: alice@test.com / password123
+go run main.go
+# Login: test@example.com / password123
 # Choose: 1 (WebSocket)
 
 🔗 Connected to WebSocket server!
-✅ Authentication successful!
+✅ Connected to WebSocket server!
 
-/join friends_chat
-🏠 Joined chat room: friends_chat
-✅ Successfully joined room: friends_chat
+/join c565d9e3-7e3a-4f3b-983e-0dfda67db8df
+🏠 Joining chat room: c565d9e3-7e3a-4f3b-983e-0dfda67db8df
+✅ Successfully joined room: c565d9e3-7e3a-4f3b-983e-0dfda67db8df
 
 /send Hello everyone! 👋
 📤 [14:30] You: Hello everyone! 👋
-📥 [14:30] Alice: Hello everyone! 👋
 
 # Messages from other users appear instantly:
-📥 [14:31] Bob: Hi Alice! 😊
-⌨️ Charlie is typing...
-📥 [14:32] Charlie: Hey friends! 🎉
+📥 [14:31] User-62c71fa7: Hi there! 😊
+⌨️ User-62c71fa7 is typing...
+📥 [14:32] User-62c71fa7: How are you? 🎉
 ```
 
-## 🌐 **HTTP REST API Mode (Option 2)**
+## 🌐 **HTTP REST API Mode**
 
 ### **Features**
-- Send messages via HTTP POST
-- View chat history via HTTP GET
+- Send messages via HTTP POST to `/api/v1/chatrooms/{room_id}/messages`
+- View chat history via HTTP GET from `/api/v1/chatrooms/{room_id}/messages`
+- Create and manage chat rooms
 - Works with poor connectivity
-- Lower battery usage
 
-### **Usage Methods**
-
-#### **Method 1: Create Group First**
+### **Usage**
 ```bash
-# Choose: 5 (Create Group)
+# Choose: 6 (Create Group)
 👥 Group Name: My Team
-👤 Participant Emails: bob@test.com,charlie@test.com
+👤 Participant User IDs: user-id-1,user-id-2
 ✅ Group 'My Team' created successfully!
-🆔 Group ID: 550e8400-e29b-41d4-a716-446655440000
+🆔 Group ID: new-room-id
 
 # Choose: 2 (Send HTTP Message)
+🏠 Chat Room ID: new-room-id
 💬 Message: Hello team via HTTP!
-✅ Message sent successfully!
-```
-
-#### **Method 2: Use 'auto' for Direct Chat**
-```bash
-# Choose: 2 (Send HTTP Message)
-🏠 Chat Room ID (or 'auto' for direct chat): auto
-💬 Message: Direct message via HTTP!
 ✅ Message sent successfully!
 ```
 
@@ -134,195 +124,142 @@ npm run dev          # Start backend server
 
 ### **Setup Multiple Users**
 ```bash
-# Terminal 1 - Alice
-./chat-client
-1 → alice@test.com → password123 → 1 (WebSocket)
+# Terminal 1 - User 1
+go run main.go
+1 → test@example.com → password123 → 1 (WebSocket)
 /join demo_room
 /send Hi everyone!
 
-# Terminal 2 - Bob
-./chat-client
-1 → bob@test.com → password123 → 1 (WebSocket)
+# Terminal 2 - User 2 (register new user first)
+go run main.go
+2 → user2@example.com → password123 → 1 (WebSocket)
 /join demo_room
-/send Hello Alice!
-
-# Terminal 3 - Charlie
-./chat-client
-1 → charlie@test.com → password123 → 1 (WebSocket)
-/join demo_room
-/send Hey friends!
+/send Hello User 1!
 ```
-
-**Result:** All users see each other's messages in real-time! 🎉
 
 ## 🔧 **Configuration**
 
 ### **Backend URLs**
 ```go
-// Default configuration
-HTTP API: http://localhost:3001
-WebSocket: ws://localhost:3001
+// Current configuration
+HTTP API: http://localhost:8080/api/v1
+WebSocket: ws://localhost:8080/ws
 ```
 
-### **Test Users**
+### **Test Credentials**
 ```
-Email: alice@test.com    Password: password123
-Email: bob@test.com      Password: password123
-Email: charlie@test.com  Password: password123
+Email: test@example.com
+Password: password123
 ```
 
-## 🛠️ **Build Commands**
+## 🧪 **Testing**
 
-### **Basic Build**
+### **Integration Tests**
 ```bash
-go build -o chat-client main.go
+cd chat-client
+./test-integration.sh
 ```
 
-### **Cross-Platform Build**
-```bash
-# Windows
-GOOS=windows GOARCH=amd64 go build -o chat-client.exe main.go
+This will test:
+- ✅ Backend health check
+- ✅ User registration
+- ✅ User login
+- ✅ Chat room creation
+- ✅ Chat room listing
 
-# macOS
-GOOS=darwin GOARCH=amd64 go build -o chat-client-mac main.go
-
-# Linux
-GOOS=linux GOARCH=amd64 go build -o chat-client-linux main.go
-```
-
-### **Using Makefile**
-```bash
-make build      # Build for current platform
-make build-all  # Build for all platforms
-make run        # Build and run
-make clean      # Clean build artifacts
-```
+### **Manual Testing**
+See [demo.md](demo.md) for a complete walkthrough.
 
 ## 🚨 **Troubleshooting**
 
 ### **Connection Issues**
 
-#### **Problem: WebSocket connection refused**
+#### **Problem: Backend not running**
 ```
-❌ WebSocket connection failed: dial tcp [::1]:3001: connect: connection refused
+❌ Failed to create request: connection refused
 ```
 
 **Solution:**
 ```bash
-# Start backend server
-cd backend
-npm run dev
-
-# Should see:
-🚀 Server is running on port 3001
-📡 WebSocket server is ready
+cd backend-go
+make run
+# Should see: Starting HTTP server port 8080
 ```
 
 #### **Problem: Authentication failed**
 ```
-❌ Login failed: Invalid credentials
+❌ Login failed: Status 401
 ```
 
 **Solutions:**
-1. Use test credentials: `alice@test.com / password123`
-2. Create test users: `cd backend && node create-test-user.js`
-3. Register new account using option 2
+1. Use test credentials: `test@example.com / password123`
+2. Register new account using option 2
+3. Run integration tests to create test user
 
-### **HTTP API Issues**
+### **WebSocket Issues**
 
-#### **Problem: HTTP message fails with Status 400**
+#### **Problem: WebSocket connection failed**
 ```
-❌ Failed to send message. Status: 400
-```
-
-**Solutions:**
-1. Create group first (Option 5) to get valid room ID
-2. Use 'auto' for direct chat
-3. Ensure you're logged in with valid token
-
-### **Real-time Chat Issues**
-
-#### **Problem: Can't see other users' messages**
-```
-Alice sends message but Bob doesn't see it
+❌ WebSocket connection failed: invalid token
 ```
 
 **Solutions:**
-1. Ensure both users join the same room: `/join same_room_name`
-2. Check both users are authenticated successfully
-3. Verify backend server is running without errors
+1. Ensure you're logged in first
+2. Check JWT token is valid
+3. Verify backend WebSocket endpoint is running
 
-## 📊 **Feature Comparison**
+## 📊 **API Integration**
 
-| Feature | WebSocket Mode | HTTP Mode |
-|---------|---------------|-----------|
-| Real-time messaging | ✅ | ❌ |
-| Typing indicators | ✅ | ❌ |
-| Live status updates | ✅ | ❌ |
-| Message history | ✅ | ✅ |
-| Group creation | ✅ | ✅ |
-| Offline capability | ❌ | ✅ |
-| Battery usage | Higher | Lower |
-| Network usage | Persistent | On-demand |
-| Reliability | Requires stable connection | Works with poor connectivity |
-
-## 🎯 **Choose Your Mode**
-
-### **Use WebSocket Mode When:**
-- You want live chat experience
-- Network connection is stable
-- Real-time interaction is important
-- Multiple users chatting simultaneously
-
-### **Use HTTP Mode When:**
-- Network connection is unstable
-- Battery life is important
-- Simple message sending is sufficient
-- Offline capability is needed
-
-## 🔄 **Integration with Backend**
-
-### **API Endpoints Used**
+### **Endpoints Used**
 ```
-POST /api/auth/login        # User authentication
-POST /api/auth/register     # User registration
-POST /api/messages          # Send message (HTTP mode)
-GET /api/messages           # Get chat history
-POST /api/chatrooms         # Create group chat
-WebSocket: ws://localhost:3001  # Real-time communication
+POST /api/v1/auth/register              # User registration
+POST /api/v1/auth/login                 # User authentication
+GET  /api/v1/chatrooms                  # List chat rooms
+POST /api/v1/chatrooms                  # Create chat room
+POST /api/v1/chatrooms/{id}/join        # Join chat room
+GET  /api/v1/chatrooms/{id}/messages    # Get messages
+POST /api/v1/chatrooms/{id}/messages    # Send message
+WebSocket: ws://localhost:8080/ws       # Real-time communication
 ```
 
-### **Message Flow**
+### **Message Format**
+```json
+{
+  "type": "message",
+  "room_id": "room-uuid",
+  "sender_id": "user-uuid", 
+  "content": "Hello world!",
+  "timestamp": "2025-12-12T13:53:20Z"
+}
 ```
-1. Authentication: JWT token exchange
-2. WebSocket: Persistent connection for real-time
-3. Room Management: Join/leave chat rooms
-4. Message Broadcasting: Real-time message delivery
-5. HTTP Fallback: Reliable message sending
+
+## 🎯 **Architecture**
+
+```
+┌─────────────────┐    HTTP/WebSocket    ┌─────────────────┐
+│   Go CLI Client │ ←──────────────────→ │   Go Backend    │
+│                 │                      │                 │
+│ • Authentication│                      │ • JWT Auth      │
+│ • WebSocket     │                      │ • WebSocket Hub │
+│ • REST API      │                      │ • REST API      │
+│ • Chat UI       │                      │ • PostgreSQL    │
+└─────────────────┘                      │ • Redis Cache   │
+                                         └─────────────────┘
 ```
 
-## 🎉 **Success Indicators**
+## 🔄 **Integration Status**
 
-### **Healthy System Shows:**
-```bash
-# Backend
-🚀 Server is running on port 3001
-📡 WebSocket server is ready
-
-# Client Connection
-🔗 Connected to WebSocket server!
-✅ Authentication successful!
-✅ Successfully joined room: room_name
-
-# Message Flow
-📤 [14:30] You: Hello!
-📥 [14:31] Friend: Hi there!
-⌨️ Friend is typing...
-```
+✅ **Completed Integration with Go Backend**
+- JWT authentication with token-based WebSocket connections
+- REST API endpoints for chat rooms and messages  
+- Real-time WebSocket messaging with proper message formats
+- Chat room management (create, join, list)
+- Message history retrieval
+- Typing indicators and status updates
+- Cross-platform compatibility
 
 ## 📝 **Dependencies**
 
-### **Go Modules**
 ```go
 module chat-client
 
@@ -331,38 +268,21 @@ go 1.21
 require github.com/gorilla/websocket v1.5.1
 ```
 
-### **Key Libraries**
-- `github.com/gorilla/websocket` - WebSocket client
-- Standard Go libraries for HTTP, JSON, CLI
+## 🚀 **Quick Start (5 minutes)**
 
-## 🚀 **Quick Start Commands**
-
-### **5-Minute Test**
 ```bash
-# Terminal 1
-./chat-client
-1 → alice@test.com → password123 → 1
-/join quick_test
-/send Testing 123
+# 1. Start backend
+cd backend-go && make run
 
-# Terminal 2
-./chat-client
-1 → bob@test.com → password123 → 1
-/join quick_test
-# Should see: 📥 [time] Alice: Testing 123
-/send I can see your message!
+# 2. Test integration  
+cd ../chat-client && ./test-integration.sh
 
-# Terminal 1 should see: 📥 [time] Bob: I can see your message!
+# 3. Start client
+go run main.go
+
+# 4. Login and chat
+# Email: test@example.com, Password: password123
+# Choose WebSocket mode and start chatting!
 ```
 
-## 🎯 **Production Ready**
-
-This chat client is production-ready with:
-- ✅ **Secure Authentication** - JWT-based security
-- ✅ **Real-time Communication** - WebSocket integration
-- ✅ **Reliable Fallback** - HTTP REST API mode
-- ✅ **Error Handling** - Graceful error recovery
-- ✅ **Cross-Platform** - Works on Windows, macOS, Linux
-- ✅ **User-Friendly** - Intuitive command-line interface
-
-**Perfect for testing, development, and production use of real-time chat systems!** 🚀💬✨
+**Perfect for testing and demonstrating real-time chat systems!** 🚀💬✨

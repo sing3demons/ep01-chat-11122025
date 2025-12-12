@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # Test PostgreSQL Database
+  test-postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=testuser
+      - POSTGRES_PASSWORD=testpass
+      - POSTGRES_DB=testdb
+    ports:
+      - "5433:5432"
+    volumes:
+      - test_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U testuser"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Test Redis Cache
+  test-redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    volumes:
+      - test_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Integration Test Runner
+  integration-tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    depends_on:
+      test-postgres:
+        condition: service_healthy
+      test-redis:
+        condition: service_healthy
+    environment:
+      - TEST_DB_HOST=test-postgres
+      - TEST_DB_PORT=5432
+      - TEST_DB_USER=testuser
+      - TEST_DB_PASSWORD=testpass
+      - TEST_DB_NAME=testdb
+      - TEST_REDIS_HOST=test-redis
+      - TEST_REDIS_PORT=6379
+    command: make test-integration
+    volumes:
+      - .:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  # E2E Test Runner
+  e2e-tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    depends_on:
+      test-postgres:
+        condition: service_healthy
+      test-redis:
+        condition: service_healthy
+    environment:
+      - TEST_DB_HOST=test-postgres
+      - TEST_DB_PORT=5432
+      - TEST_DB_USER=testuser
+      - TEST_DB_PASSWORD=testpass
+      - TEST_DB_NAME=testdb
+      - TEST_REDIS_HOST=test-redis
+      - TEST_REDIS_PORT=6379
+    command: make test-e2e
+    volumes:
+      - .:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "8081:8081"
+
+volumes:
+  test_postgres_data:
+  test_redis_data:
