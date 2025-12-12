@@ -17,9 +17,13 @@ module.exports = {
     '!src/server.ts',
     '!src/setupTests.ts'
   ],
-  setupFilesAfterEnv: ['<rootDir>/src/setupTests.ts'],
-  testTimeout: 10000,
+  setupFilesAfterEnv: [
+    '<rootDir>/src/setupTests.ts',
+    '<rootDir>/src/__tests__/integration/setup.ts'
+  ],
+  testTimeout: 30000,
   clearMocks: true,
   restoreMocks: true,
-  verbose: true
+  verbose: true,
+  maxWorkers: 1
 };
