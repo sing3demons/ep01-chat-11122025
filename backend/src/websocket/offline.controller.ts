@@ -3,13 +3,14 @@ import { OfflineService } from './offline.service';
 import { ReconnectionManager } from './reconnection.manager';
 import { WebSocketService } from './websocket.service';
 import { ValidationUtils } from '../utils/validation';
+import { ICustomLogger } from '../logger/logger';
 
 /**
  * Offline Controller
  * Handles HTTP requests for offline support features
  */
 export class OfflineController {
-  constructor(private readonly offlineService: OfflineService) { }
+  constructor(private readonly offlineService: OfflineService, private readonly logger: ICustomLogger) { }
   /**
    * Get queued messages for authenticated user
    */

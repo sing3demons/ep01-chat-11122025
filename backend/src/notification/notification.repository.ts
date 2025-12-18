@@ -1,6 +1,7 @@
 import { Notification, NotificationSettings, ChatRoom } from '@prisma/client';
 import prisma from '../config/database';
 import { CreateNotificationData, UpdateNotificationData, UpdateNotificationSettingsData, NotificationQuery } from './notification.model';
+import { ICustomLogger } from '../logger/logger';
 
 export interface INotificationRepository {
   createNotification(data: CreateNotificationData): Promise<Notification>;
@@ -32,7 +33,7 @@ export interface INotificationRepository {
  * Handles all database operations related to notifications
  */
 export class NotificationRepository implements INotificationRepository {
-  constructor(private readonly prismaInstance = prisma) {}
+  constructor(private readonly prismaInstance = prisma, private readonly logger: ICustomLogger) { }
   /**
    * Create a new notification
    */

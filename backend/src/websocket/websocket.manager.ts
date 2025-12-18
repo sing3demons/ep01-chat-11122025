@@ -1,10 +1,11 @@
 import { WebSocket, WebSocketServer } from 'ws';
 import { IncomingMessage } from 'http';
-import { JWTUtils } from '../utils/jwt';
 import { AuthService } from '../auth/auth.service';
-import { UserService } from '../user/user.service';
 import { OfflineService } from './offline.service';
 import { ReconnectionManager } from './reconnection.manager';
+import { ICustomLogger } from '../logger/logger';
+import { AuthRepository } from '../auth';
+import prisma from '../config/database';
 
 export interface WebSocketConnection {
   id: string;
@@ -36,13 +37,16 @@ export class WebSocketManager {
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private readonly HEARTBEAT_INTERVAL = 30000; // 30 seconds
   private readonly CONNECTION_TIMEOUT = 60000; // 60 seconds
+  private readonly authService: AuthService
 
-  constructor(private wss: WebSocketServer) {
+  constructor(private wss: WebSocketServer, private readonly logger: ICustomLogger) {
+    const authRepository = new AuthRepository(prisma, logger);
+    this.authService = new AuthService(authRepository);
     this.setupHeartbeat();
     this.setupWebSocketServer();
-    
+
     // Initialize offline support and reconnection manager
-    const offlineService = OfflineService.getInstance();
+    // const offlineService = OfflineService.getInstance();
     const reconnectionManager = ReconnectionManager.getInstance();
     reconnectionManager.initialize(this);
   }
@@ -210,7 +214,7 @@ export class WebSocketManager {
       }
 
       // Verify token
-      const authResult = await AuthService.verifyToken(token);
+      const authResult = await this.authService.verifyToken(token);
 
       if (!authResult.success || !authResult.data) {
         this.sendAuthError(connectionId, 'Invalid token');
@@ -280,9 +284,9 @@ export class WebSocketManager {
     const reconnectionManager = ReconnectionManager.getInstance();
     if (connection.userId) {
       await reconnectionManager.handleDisconnection(
-        connection.userId, 
-        connectionId, 
-        code, 
+        connection.userId,
+        connectionId,
+        code,
         reason,
         connection.userAgent // Use userAgent as deviceId for now
       );
@@ -309,7 +313,7 @@ export class WebSocketManager {
       const userConnections = this.userConnections.get(connection.userId);
       if (userConnections) {
         userConnections.delete(connectionId);
-        
+
         // If no more connections for this user, update offline status
         if (userConnections.size === 0) {
           this.userConnections.delete(connection.userId);
@@ -326,7 +330,7 @@ export class WebSocketManager {
    */
   private handleError(connectionId: string, error: Error): void {
     console.error(`WebSocket error for ${connectionId}:`, error);
-    
+
     const connection = this.connections.get(connectionId);
     if (connection) {
       this.sendError(connection.socket, 'Connection error occurred');
@@ -354,7 +358,7 @@ export class WebSocketManager {
     const connection = this.connections.get(connectionId);
     if (connection) {
       connection.lastHeartbeat = new Date();
-      
+
       // Update connection health
       const reconnectionManager = ReconnectionManager.getInstance();
       reconnectionManager.updateConnectionHealth(connectionId, true);
@@ -372,10 +376,10 @@ export class WebSocketManager {
     }
 
     const { content, chatRoomId } = data.data || {};
-    
+
     // Use current room if no chatRoomId provided
     const targetRoomId = chatRoomId || this.userRooms.get(connectionId);
-    
+
     if (!targetRoomId) {
       this.sendError(connection.socket, 'No chat room specified. Use /join <room_id> first.');
       return;
@@ -443,7 +447,7 @@ export class WebSocketManager {
     try {
       // Import MessageService to handle typing indicator
       const { MessageService } = await import('../message/message.service');
-      
+
       const isTyping = data.type === 'typing_start';
       // TODO: Implement proper dependency injection for MessageService
       // const result = await MessageService.handleTypingIndicator(
@@ -495,7 +499,7 @@ export class WebSocketManager {
     this.userRooms.set(connectionId, chatRoomId);
 
     console.log(`User ${connection.userId} joined room: ${chatRoomId}`);
-    
+
     // Send confirmation
     this.sendMessage(connection.socket, {
       type: 'room_joined',
@@ -519,8 +523,8 @@ export class WebSocketManager {
    * Handle message status update (read/delivered)
    */
   private async handleMessageStatusUpdate(
-    connectionId: string, 
-    data: WebSocketMessage, 
+    connectionId: string,
+    data: WebSocketMessage,
     status: 'read' | 'delivered'
   ): Promise<void> {
     const connection = this.connections.get(connectionId);
@@ -535,7 +539,7 @@ export class WebSocketManager {
     try {
       // Import MessageService to handle status update
       const { MessageService } = await import('../message/message.service');
-      
+
       // TODO: Implement proper dependency injection for MessageService
       // const result = await MessageService.updateMessageStatus(
       //   messageId,
@@ -570,7 +574,7 @@ export class WebSocketManager {
     try {
       // Import MessageService to get unread count
       const { MessageService } = await import('../message/message.service');
-      
+
       // TODO: Implement proper dependency injection for MessageService
       // const result = await MessageService.getUnreadMessageCount(
       //   connection.userId,
@@ -635,7 +639,7 @@ export class WebSocketManager {
       // Get user's contacts (this will be implemented when contact service is ready)
       // For now, just log the status change
       console.log(`Broadcasting status change for user ${userId}: ${isOnline ? 'online' : 'offline'}`);
-      
+
       // TODO: Get user contacts and broadcast to their active connections
       // const contacts = await ContactService.getUserContacts(userId);
       // for (const contact of contacts) {
@@ -809,7 +813,7 @@ export class WebSocketManager {
     try {
       // Import MessageService to mark messages as delivered
       const { MessageService } = await import('../message/message.service');
-      
+
       // TODO: Implement proper dependency injection for MessageService
       // await MessageService.markMessagesAsDelivered(userId);
     } catch (error) {
@@ -930,11 +934,11 @@ export class WebSocketManager {
     try {
       const reconnectionManager = ReconnectionManager.getInstance();
       const offlineService = OfflineService.getInstance();
-      
+
       const connectionHealth = reconnectionManager.getConnectionHealth(connectionId);
-      const queuedMessages = connection.isActive ? 
+      const queuedMessages = connection.isActive ?
         offlineService.getQueuedMessages(connection.userId) : [];
-      const deviceSessions = connection.isActive ? 
+      const deviceSessions = connection.isActive ?
         offlineService.getDeviceSessions(connection.userId) : [];
 
       this.sendMessage(connection.socket, {
@@ -973,7 +977,7 @@ export class WebSocketManager {
   public getOfflineStats(): any {
     const offlineService = OfflineService.getInstance();
     const reconnectionManager = ReconnectionManager.getInstance();
-    
+
     return {
       offline: offlineService.getOfflineStats(),
       reconnection: reconnectionManager.getReconnectionStats(),

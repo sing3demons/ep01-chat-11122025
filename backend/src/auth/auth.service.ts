@@ -206,13 +206,12 @@ export class AuthService {
   /**
    * Verify JWT token and get user
    */
-  static async verifyToken(token: string): Promise<ApiResponse> {
+  async verifyToken(token: string): Promise<ApiResponse> {
     try {
       // Verify token
       const decoded = JWTUtils.verifyToken(token);
-      const authRepository = new AuthRepository();
       // Get user from database
-      const user = await authRepository.findUserById(decoded.userId);
+      const user = await this.authRepository.findUserById(decoded.userId);
 
       if (!user) {
         return {

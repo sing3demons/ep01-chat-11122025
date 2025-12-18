@@ -1,18 +1,19 @@
 import { Request, Response } from 'express';
 import { NotificationService } from './notification.service';
 import { HTTP_STATUS } from '../config/constants';
+import { ICustomLogger } from '../logger/logger';
 
 /**
  * Notification Controller
  * Handles HTTP requests and responses for notification operations
  */
 export class NotificationController {
-  constructor(private readonly notificationService: NotificationService) {}
+  constructor(private readonly notificationService: NotificationService, private readonly logger: ICustomLogger) { }
   /**
    * Get user notifications
    * GET /notifications
    */
-   getUserNotifications = async (req: Request, res: Response): Promise<void> => {
+  getUserNotifications = async (req: Request, res: Response): Promise<void> => {
     try {
       const currentUserId = req.user?.id;
 

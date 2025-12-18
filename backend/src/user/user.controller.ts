@@ -1,13 +1,14 @@
 import { Request, Response } from 'express';
 import { UserService } from './user.service';
 import { HTTP_STATUS } from '../config/constants';
+import { ICustomLogger } from '../logger/logger';
 
 /**
  * User Controller
  * Handles HTTP requests and responses for user operations
  */
 export class UserController {
-  constructor(private readonly userService: UserService) { }
+  constructor(private readonly userService: UserService,private readonly logger: ICustomLogger) { }
   /**
    * Get user profile by ID
    * GET /users/:id

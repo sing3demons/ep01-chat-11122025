@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import database from '../config/database';
+import { ICustomLogger } from '../logger/logger';
 
 export interface QueuedMessageData {
   id?: string;
@@ -50,7 +51,7 @@ export interface IOfflineRepository {
  * Handles database operations for offline support features
  */
 export class OfflineRepository implements IOfflineRepository {
-  constructor(private readonly prismaInstance: PrismaClient = database) {}
+  constructor(private readonly prismaInstance: PrismaClient = database, private readonly logger: ICustomLogger) { }
 
   /**
    * Create queued message
@@ -183,7 +184,7 @@ export class OfflineRepository implements IOfflineRepository {
    */
   async getActiveDeviceSessionsByUser(userId: string): Promise<any[]> {
     return await this.prismaInstance.deviceSession.findMany({
-      where: { 
+      where: {
         userId,
         isActive: true
       },
@@ -209,8 +210,8 @@ export class OfflineRepository implements IOfflineRepository {
    * Update device session
    */
   async updateDeviceSession(
-    userId: string, 
-    deviceId: string, 
+    userId: string,
+    deviceId: string,
     data: Partial<DeviceSessionData>
   ): Promise<any> {
     return await this.prismaInstance.deviceSession.update({

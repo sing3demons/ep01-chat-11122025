@@ -1,5 +1,4 @@
 import { WebSocketManager, WebSocketMessage } from './websocket.manager';
-import { UserService } from '../user/user.service';
 
 /**
  * WebSocket Service
@@ -9,7 +8,7 @@ export class WebSocketService {
   private static instance: WebSocketService;
   private wsManager: WebSocketManager | null = null;
 
-  private constructor() {}
+  constructor() { }
 
   /**
    * Get singleton instance
@@ -66,7 +65,7 @@ export class WebSocketService {
       // TODO: Implement proper dependency injection for MessageRepository
       // const participants = await MessageRepository.getChatRoomParticipants(chatRoomId);
       const participants: any[] = [];
-      
+
       for (const participant of participants) {
         if (participant.userId !== senderId) {
           this.wsManager.sendToUser(participant.userId, message);
@@ -142,7 +141,7 @@ export class WebSocketService {
       // TODO: Implement proper dependency injection for ChatRoomRepository
       // const participants = await ChatRoomRepository.getChatRoomParticipants(groupId);
       const participants: any[] = [];
-      
+
       for (const participant of participants) {
         this.wsManager.sendToUser(participant.userId, message);
       }

@@ -1,6 +1,8 @@
 // Type definitions for the chat system
 // Re-export all model types for backward compatibility and centralized access
 
+import { ICustomLogger } from '@/logger/logger';
+
 export * from '../user';
 export * from '../message';
 export * from '../chatroom';
@@ -42,6 +44,7 @@ declare global {
         lastSeen: Date;
         createdAt: Date;
       };
+      logger: ICustomLogger
     }
   }
 }

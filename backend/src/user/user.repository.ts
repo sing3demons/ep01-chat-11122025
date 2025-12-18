@@ -1,6 +1,7 @@
 import { User, PrivacySettings } from '@prisma/client';
 import prisma from '../config/database';
 import { UpdateUserData } from './user.model';
+import { ICustomLogger } from '../logger/logger';
 
 export interface IUserRepository {
   findUserById(id: string): Promise<User | null>;
@@ -35,7 +36,7 @@ export interface IUserRepository {
  * Handles all database operations related to users
  */
 export class UserRepository implements IUserRepository {
-  constructor(private readonly prismaInstance = prisma) {}
+  constructor(private readonly prismaInstance = prisma, private readonly logger: ICustomLogger) {}
   /**
    * Find user by ID
    */

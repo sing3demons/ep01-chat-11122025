@@ -1,43 +1,55 @@
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { HTTP_STATUS } from '../config/constants';
+import { ICustomLogger, LogAction, SummaryError } from '../logger/logger';
+import { ResponseToClient } from '../utils/response';
 
 /**
  * Authentication Controller
  * Handles HTTP requests and responses for authentication
  */
 export class AuthController {
-  constructor(private readonly authService: AuthService) { }
+  constructor(private readonly authService: AuthService, private readonly logger: ICustomLogger) { }
   /**
    * Register a new user
    * POST /auth/register
    */
   register = async (req: Request, res: Response): Promise<void> => {
+    const logger = this.logger.init({ module: 'register', sessionId: req.headers['x-session-id'] as string })
+    res.setHeader('x-session-id', logger.sessionId());
 
+    const response = new ResponseToClient(res, req, logger, [{
+      maskingType: "password",
+      maskingField: "body.password"
+    },
+    {
+      maskingType: "email",
+      maskingField: "body.email"
+    }]);
     try {
       const { username, email, password } = req.body;
 
       if (!username || !email || !password) {
-        res.status(HTTP_STATUS.BAD_REQUEST).json({
-          success: false,
-          error: 'Username, email, and password are required'
-        });
+        response.json(HTTP_STATUS.BAD_REQUEST, { success: false, error: 'Username, email, and password are required' });
         return;
       }
 
       const result = await this.authService.register({ username, email, password });
+      const statusCode = result.success ? HTTP_STATUS.CREATED : HTTP_STATUS.BAD_REQUEST;
 
-      if (result.success) {
-        res.status(HTTP_STATUS.CREATED).json(result);
-      } else {
-        res.status(HTTP_STATUS.BAD_REQUEST).json(result);
-      }
+      response.json(statusCode, result, result.success ? 'success' : 'bad_request');
     } catch (error) {
       console.error('Registration controller error:', error);
       res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
         success: false,
         error: 'Internal server error'
       });
+      logger.error(LogAction.OUTBOUND(`register error`), {
+        headers: req.headers,
+        statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        body: { success: false, error: 'Internal server error' }
+      });
+      logger.flushError(SummaryError.fromError(error));
     }
   }
 
@@ -46,30 +58,31 @@ export class AuthController {
    * POST /auth/login
    */
   login = async (req: Request, res: Response): Promise<void> => {
+    const logger = this.logger.init({ module: 'login', sessionId: req.headers['x-session-id'] as string })
+    res.setHeader('x-session-id', logger.sessionId());
+
+    const response = new ResponseToClient(res, req, logger, [{
+      maskingType: "password",
+      maskingField: "body.password"
+    },
+    {
+      maskingType: "email",
+      maskingField: "body.email"
+    }]);
     try {
       const { email, password } = req.body;
 
       if (!email || !password) {
-        res.status(HTTP_STATUS.BAD_REQUEST).json({
-          success: false,
-          error: 'Email and password are required'
-        });
+        response.json(HTTP_STATUS.BAD_REQUEST, { success: false, error: 'Email and password are required' });
         return;
       }
 
       const result = await this.authService.login({ email, password });
+      const statusCode = result.success ? HTTP_STATUS.OK : HTTP_STATUS.UNAUTHORIZED;
 
-      if (result.success) {
-        res.status(HTTP_STATUS.OK).json(result);
-      } else {
-        res.status(HTTP_STATUS.UNAUTHORIZED).json(result);
-      }
+      response.json(statusCode, result, result.success ? 'success' : 'unauthorized');
     } catch (error) {
-      console.error('Login controller error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        error: 'Internal server error'
-      });
+      response.jsonError(HTTP_STATUS.INTERNAL_SERVER_ERROR, { success: false, error: 'Internal server error' }, error);
     }
   }
 
@@ -78,28 +91,21 @@ export class AuthController {
    * POST /auth/logout
    */
   logout = async (req: Request, res: Response): Promise<void> => {
+    const logger = this.logger.init({ module: 'logout', sessionId: req.headers['x-session-id'] as string })
+    res.setHeader('x-session-id', logger.sessionId());
+
+    const response = new ResponseToClient(res, req, logger);
     try {
       if (!req.user) {
-        res.status(HTTP_STATUS.UNAUTHORIZED).json({
-          success: false,
-          error: 'User not authenticated'
-        });
+        response.json(HTTP_STATUS.UNAUTHORIZED, { success: false, error: 'User not authenticated' }, "unauthorized");
         return;
       }
 
       const result = await this.authService.logout(req.user.id);
-
-      if (result.success) {
-        res.status(HTTP_STATUS.OK).json(result);
-      } else {
-        res.status(HTTP_STATUS.BAD_REQUEST).json(result);
-      }
+      const statusCode = result.success ? HTTP_STATUS.OK : HTTP_STATUS.BAD_REQUEST;
+      response.json(statusCode, result, result.success ? 'success' : 'bad_request');
     } catch (error) {
-      console.error('Logout controller error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        error: 'Internal server error'
-      });
+      response.jsonError(HTTP_STATUS.INTERNAL_SERVER_ERROR, { success: false, error: 'Internal server error' }, error);
     }
   }
 
@@ -108,28 +114,22 @@ export class AuthController {
    * GET /auth/me
    */
   getCurrentUser = async (req: Request, res: Response): Promise<void> => {
+    const logger = this.logger.init({ module: 'getCurrentUser', sessionId: req.headers['x-session-id'] as string })
+    res.setHeader('x-session-id', logger.sessionId());
+
+    const response = new ResponseToClient(res, req, logger);
     try {
       if (!req.user) {
-        res.status(HTTP_STATUS.UNAUTHORIZED).json({
-          success: false,
-          error: 'User not authenticated'
-        });
+        response.json(HTTP_STATUS.UNAUTHORIZED, { success: false, error: 'User not authenticated' }, "unauthorized");
         return;
       }
 
       const result = await this.authService.getSessionInfo(req.user.id);
+      const statusCode = result.success ? HTTP_STATUS.OK : HTTP_STATUS.NOT_FOUND;
 
-      if (result.success) {
-        res.status(HTTP_STATUS.OK).json(result);
-      } else {
-        res.status(HTTP_STATUS.NOT_FOUND).json(result);
-      }
+      response.json(statusCode, result, result.success ? 'success' : 'not_found');
     } catch (error) {
-      console.error('Get current user controller error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        error: 'Internal server error'
-      });
+      response.jsonError(HTTP_STATUS.INTERNAL_SERVER_ERROR, { success: false, error: 'Internal server error' }, error);
     }
   }
 
@@ -138,30 +138,24 @@ export class AuthController {
    * POST /auth/refresh
    */
   refreshToken = async (req: Request, res: Response): Promise<void> => {
+    const logger = this.logger.init({ module: 'refreshToken', sessionId: req.headers['x-session-id'] as string })
+    res.setHeader('x-session-id', logger.sessionId());
+
+    const response = new ResponseToClient(res, req, logger);
     try {
       const token = req.headers.authorization?.split(' ')[1];
 
       if (!token) {
-        res.status(HTTP_STATUS.BAD_REQUEST).json({
-          success: false,
-          error: 'Token is required'
-        });
+        response.json(HTTP_STATUS.BAD_REQUEST, { success: false, error: 'Token is required' }, "bad_request");
         return;
       }
 
       const result = await this.authService.refreshToken(token);
+      const statusCode = result.success ? HTTP_STATUS.OK : HTTP_STATUS.UNAUTHORIZED;
 
-      if (result.success) {
-        res.status(HTTP_STATUS.OK).json(result);
-      } else {
-        res.status(HTTP_STATUS.UNAUTHORIZED).json(result);
-      }
+      response.json(statusCode, result, result.success ? 'success' : 'unauthorized');
     } catch (error) {
-      console.error('Token refresh controller error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        error: 'Internal server error'
-      });
+      response.jsonError(HTTP_STATUS.INTERNAL_SERVER_ERROR, { success: false, error: 'Internal server error' }, error);
     }
   }
 
@@ -170,38 +164,29 @@ export class AuthController {
    * POST /auth/change-password
    */
   changePassword = async (req: Request, res: Response): Promise<void> => {
+    const logger = this.logger.init({ module: 'changePassword', sessionId: req.headers['x-session-id'] as string })
+    res.setHeader('x-session-id', logger.sessionId());
+
+    const response = new ResponseToClient(res, req, logger);
     try {
       if (!req.user) {
-        res.status(HTTP_STATUS.UNAUTHORIZED).json({
-          success: false,
-          error: 'User not authenticated'
-        });
+        response.json(HTTP_STATUS.UNAUTHORIZED, { success: false, error: 'User not authenticated' }, "unauthorized");
         return;
       }
 
       const { currentPassword, newPassword } = req.body;
 
       if (!currentPassword || !newPassword) {
-        res.status(HTTP_STATUS.BAD_REQUEST).json({
-          success: false,
-          error: 'Current password and new password are required'
-        });
+        response.json(HTTP_STATUS.BAD_REQUEST, { success: false, error: 'Current password and new password are required' }, "bad_request");
         return;
       }
 
       const result = await this.authService.changePassword(req.user.id, currentPassword, newPassword);
+      const statusCode = result.success ? HTTP_STATUS.OK : HTTP_STATUS.BAD_REQUEST;
 
-      if (result.success) {
-        res.status(HTTP_STATUS.OK).json(result);
-      } else {
-        res.status(HTTP_STATUS.BAD_REQUEST).json(result);
-      }
+      response.json(statusCode, result, result.success ? 'success' : 'bad_request');
     } catch (error) {
-      console.error('Change password controller error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        error: 'Internal server error'
-      });
+      response.jsonError(HTTP_STATUS.INTERNAL_SERVER_ERROR, { success: false, error: 'Internal server error' }, error);
     }
   }
 }

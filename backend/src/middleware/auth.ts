@@ -8,14 +8,15 @@ import { HTTP_STATUS } from '../config/constants';
  * Handles JWT token validation and user authentication
  */
 export class AuthMiddleware {
+  constructor(private readonly authService: AuthService) { }
   /**
    * Middleware to authenticate JWT token
    */
-  static async authenticate(req: Request, res: Response, next: NextFunction): Promise<void> {
+  authenticate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       // Extract token from Authorization header
       const token = JWTUtils.extractTokenFromHeader(req.headers.authorization);
-      
+
       if (!token) {
         res.status(HTTP_STATUS.UNAUTHORIZED).json({
           success: false,
@@ -25,8 +26,8 @@ export class AuthMiddleware {
       }
 
       // Verify token and get user
-      const result = await AuthService.verifyToken(token);
-      
+      const result = await this.authService.verifyToken(token);
+
       if (!result.success) {
         res.status(HTTP_STATUS.UNAUTHORIZED).json({
           success: false,
@@ -34,10 +35,10 @@ export class AuthMiddleware {
         });
         return;
       }
-      
+
       // Attach user to request object
       req.user = result.data;
-      
+
       next();
     } catch (error) {
       res.status(HTTP_STATUS.UNAUTHORIZED).json({
@@ -50,17 +51,18 @@ export class AuthMiddleware {
   /**
    * Optional authentication middleware (doesn't fail if no token)
    */
-  static async optionalAuthenticate(req: Request, res: Response, next: NextFunction): Promise<void> {
+  optionalAuthenticate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const token = JWTUtils.extractTokenFromHeader(req.headers.authorization);
-      
+
       if (token) {
-        const result = await AuthService.verifyToken(token);
+
+        const result = await this.authService.verifyToken(token);
         if (result.success) {
           req.user = result.data;
         }
       }
-      
+
       next();
     } catch (error) {
       // Continue without authentication if token is invalid
@@ -71,7 +73,7 @@ export class AuthMiddleware {
   /**
    * Middleware to check if user is authenticated
    */
-  static requireAuth(req: Request, res: Response, next: NextFunction): void {
+    requireAuth = (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
       res.status(HTTP_STATUS.UNAUTHORIZED).json({
         success: false,
@@ -79,7 +81,7 @@ export class AuthMiddleware {
       });
       return;
     }
-    
+
     next();
   }
 
@@ -97,7 +99,7 @@ export class AuthMiddleware {
       }
 
       const resourceUserId = req.params[userIdParam] || req.body[userIdParam];
-      
+
       if (req.user.id !== resourceUserId) {
         res.status(HTTP_STATUS.FORBIDDEN).json({
           success: false,
@@ -105,7 +107,7 @@ export class AuthMiddleware {
         });
         return;
       }
-      
+
       next();
     };
   }
@@ -115,7 +117,7 @@ export class AuthMiddleware {
    */
   static validateTokenFormat(req: Request, res: Response, next: NextFunction): void {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader) {
       res.status(HTTP_STATUS.UNAUTHORIZED).json({
         success: false,
@@ -125,7 +127,7 @@ export class AuthMiddleware {
     }
 
     const parts = authHeader.split(' ');
-    
+
     if (parts.length !== 2 || parts[0] !== 'Bearer') {
       res.status(HTTP_STATUS.UNAUTHORIZED).json({
         success: false,
@@ -141,7 +143,7 @@ export class AuthMiddleware {
       });
       return;
     }
-    
+
     next();
   }
 
@@ -150,7 +152,7 @@ export class AuthMiddleware {
    */
   static checkTokenExpiration(req: Request, res: Response, next: NextFunction): void {
     const token = JWTUtils.extractTokenFromHeader(req.headers.authorization);
-    
+
     if (!token) {
       res.status(HTTP_STATUS.UNAUTHORIZED).json({
         success: false,
@@ -166,7 +168,7 @@ export class AuthMiddleware {
       });
       return;
     }
-    
+
     next();
   }
 }

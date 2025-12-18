@@ -1,26 +1,33 @@
 import { Request, Response } from 'express';
 import { ChatRoomService } from './chatroom.service';
 import { HTTP_STATUS } from '../config/constants';
+import { ICustomLogger } from '../logger/logger';
+import { ResponseToClient } from '../utils/response';
 
 /**
  * ChatRoom Controller
  * Handles HTTP requests and responses for chat room operations
  */
 export class ChatRoomController {
-  constructor(private readonly chatRoomService: ChatRoomService) { }
+  constructor(private readonly chatRoomService: ChatRoomService, private readonly logger: ICustomLogger) { }
   /**
    * Create a new chat room
    * POST /chatrooms
    */
   createChatRoom = async (req: Request, res: Response): Promise<void> => {
+    const logger = this.logger.init({ module: this.createChatRoom.name, sessionId: req.headers['x-session-id'] as string })
+    res.setHeader('x-session-id', logger.sessionId());
+
+    const response = new ResponseToClient(res, req, logger);
     try {
       const currentUserId = req.user?.id;
 
       if (!currentUserId) {
-        res.status(HTTP_STATUS.UNAUTHORIZED).json({
-          success: false,
-          error: 'User not authenticated'
-        });
+        // res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        //   success: false,
+        //   error: 'User not authenticated'
+        // });
+        response.json(HTTP_STATUS.UNAUTHORIZED, { success: false, error: 'User not authenticated' }, "unauthorized");
         return;
       }
 
@@ -30,18 +37,21 @@ export class ChatRoomController {
       };
 
       const result = await this.chatRoomService.createChatRoom(chatRoomData);
+      const statusCode = result.success ? HTTP_STATUS.CREATED : HTTP_STATUS.BAD_REQUEST;
 
-      if (result.success) {
-        res.status(HTTP_STATUS.CREATED).json(result);
-      } else {
-        res.status(HTTP_STATUS.BAD_REQUEST).json(result);
-      }
+      // if (result.success) {
+      //   res.status(HTTP_STATUS.CREATED).json(result);
+      // } else {
+      //   res.status(HTTP_STATUS.BAD_REQUEST).json(result);
+      // }
+      response.json(statusCode, result, result.success ? 'success' : 'bad_request');
     } catch (error) {
-      console.error('Create chat room controller error:', error);
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        error: 'Internal server error'
-      });
+      // console.error('Create chat room controller error:', error);
+      // res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      //   success: false,
+      //   error: 'Internal server error'
+      // });
+      response.json(HTTP_STATUS.INTERNAL_SERVER_ERROR, { success: false, error: 'Internal server error' }, "internal_server_error", error);
     }
   }
 

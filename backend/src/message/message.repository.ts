@@ -1,6 +1,7 @@
 import { Message, User, ChatRoom } from '@prisma/client';
 import prisma from '../config/database';
 import { CreateMessageData, UpdateMessageData, MessageSearchQuery } from './message.model';
+import { ICustomLogger } from '../logger/logger';
 
 export interface IMessageRepository {
   createMessage(data: CreateMessageData): Promise<Message>;
@@ -28,7 +29,7 @@ export interface IMessageRepository {
 }
 
 export class MessageRepository implements IMessageRepository {
-  constructor(private readonly prismaInstance = prisma) { }
+  constructor(private readonly prismaInstance = prisma, private readonly logger: ICustomLogger) { }
   async createMessage(data: CreateMessageData): Promise<Message> {
     return await this.prismaInstance.message.create({
       data: {

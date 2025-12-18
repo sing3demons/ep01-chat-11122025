@@ -2,7 +2,9 @@ import { ChatRoom, ChatRoomParticipant, User, Message, PrismaClient } from '@pri
 import prisma from '../config/database';
 import { CreateChatRoomData, UpdateChatRoomData, AddParticipantData } from './chatroom.model';
 import { CHAT_ROOM_TYPES, USER_ROLES } from '../config/constants';
-import { DefaultArgs } from '@prisma/client/runtime/library';
+import { DBActionEnum, ICustomLogger, LogAction } from '../logger/logger';
+import { MaskingRule } from '@/logger/masking';
+import { PrismaModelClient } from '@/utils/sqlBuilder';
 
 export interface IChatRoomRepository {
   createChatRoom(data: CreateChatRoomData): Promise<ChatRoom>;
@@ -41,21 +43,37 @@ export interface IChatRoomRepository {
  * Handles all database operations related to chat rooms
  */
 export class ChatRoomRepository implements IChatRoomRepository {
-  constructor(private readonly prismaInstance = prisma) {}
+  constructor(private readonly prismaInstance = prisma, private readonly logger: ICustomLogger) { }
   /**
    * Create a new chat room with participants
    */
   async createChatRoom(data: CreateChatRoomData): Promise<ChatRoom> {
     return await this.prismaInstance.$transaction(async (tx) => {
       // Create chat room
-      const chatRoom = await tx.chatRoom.create({
-        data: {
-          name: data.name,
-          type: data.type,
-          createdBy: data.createdBy,
-          lastMessageAt: new Date()
-        }
-      });
+      const chatRoomBody = {
+        name: data.name,
+        type: data.type,
+        createdBy: data.createdBy,
+        lastMessageAt: new Date()
+      }
+      const qb = new PrismaModelClient<Partial<ChatRoom>>('chatRoom')
+      // const chatRoom = await tx.chatRoom.create({
+      //   data: {
+      //     name: data.name,
+      //     type: data.type,
+      //     createdBy: data.createdBy,
+      //     lastMessageAt: new Date()
+      //   }
+      // });
+      const chatRoom = await this.trackDependency(
+        {
+          dependency: 'chatRoom',
+          operation: DBActionEnum.CREATE,
+          query: qb.create({ data: chatRoomBody }).sql,
+          params: chatRoomBody,
+        },
+        () => tx.chatRoom.create({ data: chatRoomBody })
+      )
 
       // Add participants
       const participantData = data.participantIds.map((userId, index) => ({
@@ -65,9 +83,18 @@ export class ChatRoomRepository implements IChatRoomRepository {
         joinedAt: new Date()
       }));
 
-      await tx.chatRoomParticipant.createMany({
-        data: participantData
-      });
+      // await tx.chatRoomParticipant.createMany({
+      //   data: participantData
+      // });
+      await this.trackDependency(
+        {
+          dependency: 'chatRoomParticipant',
+          operation: DBActionEnum.CREATE,
+          query: new PrismaModelClient('chatRoomParticipant').createMany(participantData).sql,
+          params: participantData,
+        },
+        () => tx.chatRoomParticipant.createMany({ data: participantData })
+      )
 
       return chatRoom;
     });
@@ -77,9 +104,21 @@ export class ChatRoomRepository implements IChatRoomRepository {
    * Get chat room by ID
    */
   async getChatRoomById(id: string): Promise<ChatRoom | null> {
-    return await this.prismaInstance.chatRoom.findUnique({
-      where: { id }
-    });
+    const qb = new PrismaModelClient<ChatRoom>('chatRoom')
+    // return await this.prismaInstance.chatRoom.findUnique({
+    //   where: { id }
+    // });
+    return await this.trackDependency(
+      {
+        dependency: 'chatRoom',
+        operation: DBActionEnum.READ,
+        query: qb.findFirst({ where: { id: id } }).sql,
+        params: { id },
+      },
+      () => this.prismaInstance.chatRoom.findUnique({
+        where: { id }
+      })
+    )
   }
 
   /**
@@ -657,5 +696,22 @@ export class ChatRoomRepository implements IChatRoomRepository {
       take: limit,
       skip: offset
     });
+  }
+  private async trackDependency<T extends (...args: any) => any>(
+    option: { dependency: string, operation: string, query?: string, params?: any, maskingParams?: Array<MaskingRule>, maskingBody?: Array<MaskingRule> },
+    dbQueryFunc: T,
+  ) {
+    let sql = option.query || ''
+    let params = option.params || ''
+    let start = performance.now()
+    this.logger.setDependencyMetadata({
+      dependency: option.dependency,
+    }).debug(LogAction.DB_REQUEST(option.operation, sql), { params }, option.maskingParams);
+    const result = await dbQueryFunc();
+    this.logger.setDependencyMetadata({
+      dependency: option.dependency,
+      responseTime: performance.now() - start
+    }).debug(LogAction.DB_RESPONSE(option.operation, sql), result, option.maskingBody);
+    return result as ReturnType<typeof dbQueryFunc>
   }
 }

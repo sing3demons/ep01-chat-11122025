@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
 import { GroupService } from './group.service';
-import { ValidationUtils } from '../utils/validation';
 
 /**
  * Group Controller

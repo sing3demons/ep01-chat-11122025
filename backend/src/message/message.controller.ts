@@ -1,13 +1,14 @@
 import { Request, Response } from 'express';
 import { MessageService } from './message.service';
 import { HTTP_STATUS } from '../config/constants';
+import { ICustomLogger } from '../logger/logger';
 
 /**
  * Message Controller
  * Handles HTTP requests and responses for message operations
  */
 export class MessageController {
-  constructor(private readonly messageService: MessageService) { }
+  constructor(private readonly messageService: MessageService, private readonly logger: ICustomLogger) { }
   /**
    * Send a new message
    * POST /messages
